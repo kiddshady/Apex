@@ -1,7 +1,7 @@
 {
   "name": "apex",
   "productName": "Apex",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Apex — registro de tomas y farmacocinética personal por sustancia. Dosis, hitos (onset, pico, fin), gráficos y mapa de calor.",
   "main": "main.cjs",
   "author": "Francisco Pavez",
