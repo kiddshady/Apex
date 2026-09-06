@@ -107,11 +107,16 @@ app.whenReady().then(async () => {
     const asar = path.join(DESEMPACADA, 'resources', 'app.asar');
     assert.ok(fs.existsSync(asar), 'no está app.asar');
     const bytes = ofs.readFileSync(asar);
-    // El índice del asar es texto: los nombres de archivo se leen tal cual.
-    const cabecera = bytes.subarray(0, 64 * 1024).toString('latin1');
-    assert.ok(cabecera.includes('roboto-mono-latin-400-normal.woff2'), 'la fuente no está en el asar');
-    assert.ok(cabecera.includes('Roboto-Mono-LICENSE.txt'), 'la licencia de la fuente no viaja (la OFL lo exige)');
-    assert.ok(!cabecera.includes('humo.test.cjs'), 'los tests se colaron en el paquete');
+    /* El asar arranca con dos pickles: en el byte 12 va el largo del índice
+       JSON y en el 16 empieza el JSON. Se parsea en vez de buscar texto: con
+       node_modules adentro el índice pasa de largo los 64 KB. */
+    const largo = bytes.readUInt32LE(12);
+    const indice = JSON.parse(bytes.subarray(16, 16 + largo).toString('utf8'));
+    const fonts = indice.files?.renderer?.files?.fonts?.files || {};
+    assert.ok(fonts['roboto-mono-latin-400-normal.woff2'], 'la fuente no está en el asar');
+    assert.ok(fonts['Roboto-Mono-LICENSE.txt'], 'la licencia de la fuente no viaja (la OFL lo exige)');
+    assert.ok(!indice.files?.test, 'los tests se colaron en el paquete');
+    assert.ok(!indice.files?.tools && !indice.files?.docs, 'tools/ o docs/ se colaron en el paquete');
   });
 
   /* Arrancar el .exe de verdad. Una app empaquetada que muere al segundo igual
@@ -171,6 +176,7 @@ app.whenReady().then(async () => {
     const e = await cdpEvaluar(PUERTO, `window.apex.actualizacion.estado()`);
     assert.ok(e && typeof e.fase === 'string', `estado raro: ${JSON.stringify(e)}`);
     assert.ok(['buscando', 'al-dia', 'disponible', 'descargando', 'listo', 'error'].includes(e.fase), `fase inesperada: ${e.fase}`);
+    console.log(`        (el actualizador dijo: ${e.fase}${e.error ? ' · ' + e.error : ''})`);
     assert.equal(e.version, VERSION, `la app dice ser ${e.version}`);
     // Empaquetada, el actualizador ARRANCA: nunca queda «inactivo por dev».
     assert.ok(e.motivo !== 'dev', 'la app empaquetada cree que está en desarrollo');
