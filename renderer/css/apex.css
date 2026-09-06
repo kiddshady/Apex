@@ -1,0 +1,372 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   APEX — lo propio de esta app
+
+   Todo lo genérico ya está en `ox-`. Acá va solo lo que Onyx no tiene: la
+   línea de tiempo de un episodio, los gráficos, el selector de fase y el campo
+   de momento. Prefijo `ap-`, para que se note de un vistazo qué es del
+   framework y qué es de la app.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* `.ox-statusbar__item` declara display:flex, que le gana al display:none del
+   navegador para [hidden]. Sin esto, el ítem escondido sigue ocupando lugar. */
+[hidden] { display: none !important; }
+
+/* ── Cifras del tablero ──────────────────────────────────────────────────── */
+.ap-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--ox-3);
+  margin-bottom: var(--ox-5);
+}
+.ap-kpi {
+  padding: var(--ox-4);
+  background: var(--ox-s2);
+  border-radius: var(--ox-r-lg);
+  box-shadow: var(--ox-hairline), var(--ox-e1);
+}
+/* Cifra grande = figuras proporcionales. Las tabulares hacen que «121» quede
+   flojo a este tamaño; se reservan para las columnas que tienen que alinear. */
+.ap-kpi .ox-stat__value { font-size: var(--ox-fs-26); font-variant-numeric: normal; }
+.ap-kpi .ox-stat__unit { margin-left: 3px; }
+
+/* ── Fila de filtros: una sola, arriba de lo que filtra ─────────────────── */
+.ap-filtros {
+  display: flex;
+  align-items: center;
+  gap: var(--ox-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--ox-4);
+}
+.ap-filtros .ox-select { width: auto; min-width: 190px; }
+
+/* ── Accesos rápidos: una toma habitual, a un click de confirmar ────────── */
+.ap-rapidas { display: flex; flex-wrap: wrap; gap: var(--ox-2); }
+.ap-rapidas .ox-btn { height: 28px; }
+.ap-rapidas .ox-btn b { font-weight: var(--ox-w-semi); color: var(--ox-text); font-variant-numeric: tabular-nums; }
+
+/* ── Un día del registro ─────────────────────────────────────────────────── */
+.ap-dia { margin-bottom: var(--ox-5); }
+.ap-dia__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ox-3);
+  padding: 0 var(--ox-3) var(--ox-2);
+}
+.ap-dia__fecha { font-size: var(--ox-fs-12); font-weight: var(--ox-w-medium); color: var(--ox-text-2); }
+.ap-dia__fecha::first-letter { text-transform: uppercase; }
+.ap-dia__total {
+  margin-left: auto;
+  font-size: var(--ox-fs-11);
+  color: var(--ox-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Una toma, como fila ─────────────────────────────────────────────────── */
+.ap-toma__hora {
+  width: 44px;
+  flex: 0 0 auto;
+  font-family: var(--ox-mono);
+  font-size: 12px;
+  color: var(--ox-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ap-toma__cant { color: var(--ox-text); font-variant-numeric: tabular-nums; }
+.ap-toma__meta { display: flex; align-items: center; gap: var(--ox-2); flex: 0 0 auto; }
+.ap-toma__meta .ox-chip .ox-icon { width: 12px; height: 12px; }
+
+/* ── La línea de tiempo del episodio ─────────────────────────────────────── */
+.ap-timeline { display: flex; flex-direction: column; }
+.ap-hito {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: var(--ox-3);
+  animation: ox-rise-in var(--ox-t-3) var(--ox-ease) both;
+  animation-delay: calc(var(--i, 0) * 26ms);
+}
+.ap-hito__rail { position: relative; display: flex; justify-content: center; }
+.ap-hito__rail::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 1px;
+  margin-left: -.5px;
+  background: var(--ox-line-2);
+}
+.ap-hito:first-child .ap-hito__rail::before { top: 14px; }
+.ap-hito:last-child .ap-hito__rail::before { bottom: auto; height: 14px; }
+.ap-hito:only-child .ap-hito__rail::before { display: none; }
+.ap-hito__nodo {
+  position: relative;
+  z-index: 1;
+  width: 10px; height: 10px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--ox-s3);
+  box-shadow: inset 0 0 0 1.5px var(--ox-text-4);
+  transition: var(--tr-color);
+}
+.ap-hito--toma .ap-hito__nodo { background: var(--ox-accent); box-shadow: 0 0 0 3px var(--ox-wash-2); }
+.ap-hito--pico .ap-hito__nodo { box-shadow: inset 0 0 0 1.5px var(--ox-text-2); }
+.ap-hito--fin .ap-hito__nodo { background: var(--ox-text-3); box-shadow: none; }
+.ap-hito__body { min-width: 0; padding: 6px 0 20px; }
+.ap-hito:last-child .ap-hito__body { padding-bottom: 6px; }
+.ap-hito__head { display: flex; align-items: center; gap: var(--ox-2); min-height: 16px; }
+.ap-hito__hora {
+  font-family: var(--ox-mono);
+  font-size: 12px;
+  color: var(--ox-text);
+  font-variant-numeric: tabular-nums;
+}
+.ap-hito__offset {
+  font-family: var(--ox-mono);
+  font-size: 11px;
+  color: var(--ox-text-4);
+  font-variant-numeric: tabular-nums;
+}
+.ap-hito__titulo { font-size: var(--ox-fs-13); font-weight: var(--ox-w-medium); color: var(--ox-text); }
+.ap-hito__notas {
+  margin-top: 4px;
+  font-size: var(--ox-fs-12);
+  line-height: var(--ox-lh-loose);
+  color: var(--ox-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  cursor: text;
+}
+.ap-hito__int {
+  display: flex;
+  align-items: center;
+  gap: var(--ox-2);
+  margin-top: 7px;
+  font-size: var(--ox-fs-11);
+  color: var(--ox-text-3);
+}
+.ap-hito__int .ox-meter { width: 110px; }
+.ap-hito__int b { font-weight: var(--ox-w-medium); color: var(--ox-text-2); font-variant-numeric: tabular-nums; }
+.ap-hito .ox-rowactions { margin-left: auto; }
+.ap-hito:hover .ox-rowactions,
+.ap-hito:focus-within .ox-rowactions { opacity: 1; transform: none; }
+
+/* ── Campo de momento: fecha + hora + ahora ──────────────────────────────── */
+.ap-momento {
+  display: grid;
+  grid-template-columns: 1fr 84px auto;
+  gap: var(--ox-2);
+  align-items: center;
+}
+.ap-momento__hint:empty { display: none; }
+
+/* ── Intensidad: el slider con su cifra ──────────────────────────────────── */
+.ap-intensidad {
+  display: grid;
+  grid-template-columns: 1fr 36px;
+  gap: var(--ox-3);
+  align-items: center;
+}
+.ap-intensidad__valor {
+  font-family: var(--ox-mono);
+  font-size: 13px;
+  text-align: right;
+  color: var(--ox-text);
+  font-variant-numeric: tabular-nums;
+}
+.ap-intensidad__valor.is-off { color: var(--ox-text-4); }
+
+/* ── Selector de fase: seis, en grilla, cada una con su ícono ────────────── */
+.ap-fases { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ox-2); }
+.ap-fase {
+  display: flex;
+  align-items: center;
+  gap: var(--ox-2);
+  height: 32px;
+  padding: 0 var(--ox-3);
+  border: 0;
+  border-radius: var(--ox-r-sm);
+  background: var(--ox-sunken);
+  color: var(--ox-text-2);
+  font-size: var(--ox-fs-12);
+  font-weight: var(--ox-w-medium);
+  text-align: left;
+  cursor: default;
+  box-shadow: var(--ox-hairline);
+  transition: var(--tr-color);
+}
+.ap-fase .ox-icon { width: 15px; height: 15px; color: var(--ox-text-3); transition: color var(--ox-t-1) var(--ox-ease-soft); }
+.ap-fase:hover { background: var(--ox-s2); color: var(--ox-text); }
+.ap-fase.is-active { background: var(--ox-wash-2); color: var(--ox-text); box-shadow: inset 0 0 0 1px var(--ox-ring); }
+.ap-fase.is-active .ox-icon { color: var(--ox-accent); }
+
+/* ── Gráficos ────────────────────────────────────────────────────────────── */
+.ap-chart { position: relative; width: 100%; min-height: 40px; }
+.ap-chart svg { display: block; overflow: visible; max-width: 100%; }
+.ap-chart--heat svg { max-width: none; }
+.ap-chart__vacio {
+  display: grid;
+  place-items: center;
+  font-size: var(--ox-fs-12);
+  color: var(--ox-text-4);
+}
+
+/* La grilla y los ejes son hairlines sólidos y recesivos: el dato es lo único
+   que puede hablar fuerte. */
+.ap-grid { stroke: var(--ox-line); stroke-width: 1; shape-rendering: crispEdges; }
+.ap-eje  { stroke: var(--ox-line-2); stroke-width: 1; shape-rendering: crispEdges; }
+.ap-tick { fill: var(--ox-text-4); font-family: var(--ox-font); font-size: 10px; }
+.ap-tick--num { font-variant-numeric: tabular-nums; }
+
+/* La serie: línea de 2 px, puntos de 7 px con anillo de la superficie, área al 10 %. */
+.ap-linea { fill: none; stroke: var(--ox-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ap-area  { fill: rgb(var(--ox-accent-rgb) / .10); }
+.ap-punto { fill: var(--ox-accent); stroke: var(--ox-s2); stroke-width: 2; }
+/* El texto viste tokens de texto, nunca el color de la serie. */
+.ap-etiqueta { fill: var(--ox-text-2); font-family: var(--ox-font); font-size: 11px; font-weight: 500; }
+
+.ap-cursor {
+  stroke: var(--ox-line-3);
+  stroke-width: 1;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ox-t-1) var(--ox-ease-soft);
+}
+.ap-cursor__punto {
+  fill: var(--ox-accent);
+  stroke: var(--ox-text);
+  stroke-width: 2;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ox-t-1) var(--ox-ease-soft);
+}
+
+/* Curvas de episodios: gris fino para el contexto, acento para lo que importa. */
+.ap-curva {
+  fill: none;
+  stroke: var(--ox-text-4);
+  stroke-width: 1.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: .7;
+}
+.ap-curva--sola, .ap-curva--media { stroke: var(--ox-accent); stroke-width: 2; opacity: 1; }
+.ap-curva__pt { fill: var(--ox-text-3); stroke: var(--ox-s2); stroke-width: 1.5; }
+.ap-curva__pt--sola { fill: var(--ox-accent); stroke: var(--ox-s2); stroke-width: 2; }
+.ap-curva__lab { fill: var(--ox-text-2); font-family: var(--ox-font); font-size: 10.5px; font-weight: 500; }
+
+/* El tooltip: el valor manda, la etiqueta acompaña. */
+.ap-chart__tip {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 8px;
+  border-radius: var(--ox-r-sm);
+  background: var(--ox-s4);
+  box-shadow: var(--ox-hairline), var(--ox-e3);
+  font-size: var(--ox-fs-11);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--ox-t-1) var(--ox-ease-soft), transform var(--ox-t-1) var(--ox-ease-soft);
+}
+.ap-chart__tip.is-on { opacity: 1; }
+.ap-chart__tip__val { font-size: var(--ox-fs-12); font-weight: var(--ox-w-semi); color: var(--ox-text); font-variant-numeric: tabular-nums; }
+.ap-chart__tip__lab { color: var(--ox-text-3); }
+
+/* Mapa de calor: una sola tonalidad, de menos a más. El cero se hunde casi en
+   la superficie; el máximo es el acento pleno. */
+.ap-heat__celda {
+  fill: rgb(255 255 255 / .04);
+  stroke: transparent;
+  stroke-width: 1;
+  transition: fill var(--ox-t-2) var(--ox-ease-soft), stroke var(--ox-t-1) var(--ox-ease-soft);
+}
+.ap-heat__celda[data-nivel="1"], .ap-leyenda__celda[data-nivel="1"] { fill: rgb(var(--ox-accent-rgb) / .22); background: rgb(var(--ox-accent-rgb) / .22); }
+.ap-heat__celda[data-nivel="2"], .ap-leyenda__celda[data-nivel="2"] { fill: rgb(var(--ox-accent-rgb) / .42); background: rgb(var(--ox-accent-rgb) / .42); }
+.ap-heat__celda[data-nivel="3"], .ap-leyenda__celda[data-nivel="3"] { fill: rgb(var(--ox-accent-rgb) / .66); background: rgb(var(--ox-accent-rgb) / .66); }
+.ap-heat__celda[data-nivel="4"], .ap-leyenda__celda[data-nivel="4"] { fill: rgb(var(--ox-accent-rgb) / .92); background: rgb(var(--ox-accent-rgb) / .92); }
+.ap-heat__celda.is-fuera { opacity: .3; }
+.ap-heat__celda.is-hoy { stroke: var(--ox-line-3); }
+.ap-heat__celda:hover { stroke: var(--ox-text-2); }
+
+.ap-leyenda {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--ox-3);
+  font-size: var(--ox-fs-10);
+  color: var(--ox-text-4);
+}
+.ap-leyenda__celda { width: 10px; height: 10px; border-radius: 2px; background: rgb(255 255 255 / .04); }
+.ap-leyenda__linea {
+  width: 14px; height: 0;
+  border-top: 2px solid var(--ox-text-4);
+  border-radius: 1px;
+  margin-left: var(--ox-2);
+}
+.ap-leyenda__linea:first-child { margin-left: 0; }
+.ap-leyenda__linea--acento { border-color: var(--ox-accent); }
+
+/* Tarjeta de gráfico: el cuerpo respira menos arriba porque el head ya lo hizo. */
+.ap-cardchart { margin-bottom: var(--ox-4); }
+.ap-cardchart .ox-card__head { padding-bottom: var(--ox-2); }
+.ap-cardchart .ox-card__head .ox-meta { margin-left: var(--ox-1); }
+.ap-cardchart .ox-card__head .ox-rowactions,
+.ap-cardchart .ox-card__head > .ox-spacer ~ * { margin-left: auto; }
+
+/* La tabla gemela de un gráfico, que se despliega debajo. */
+.ap-tabla { margin-top: var(--ox-3); max-height: 260px; }
+.ap-tabla .ox-table td { padding: 5px var(--ox-3); }
+
+/* ── Perfil farmacocinético: las cifras del patrón ───────────────────────── */
+.ap-perfil {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: var(--ox-3);
+}
+.ap-perfil__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--ox-3) var(--ox-4);
+  background: var(--ox-sunken);
+  border-radius: var(--ox-r-md);
+  box-shadow: var(--ox-hairline);
+}
+.ap-perfil__k {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ox-fs-10);
+  font-weight: var(--ox-w-semi);
+  letter-spacing: var(--ox-track-caps);
+  text-transform: uppercase;
+  color: var(--ox-text-4);
+}
+.ap-perfil__k .ox-icon { width: 12px; height: 12px; color: var(--ox-text-3); }
+.ap-perfil__v { font-size: var(--ox-fs-15); font-weight: var(--ox-w-semi); letter-spacing: var(--ox-track-tight); color: var(--ox-text); }
+.ap-perfil__v.is-vacio { color: var(--ox-text-4); font-weight: var(--ox-w-regular); }
+.ap-perfil__r { font-size: var(--ox-fs-11); color: var(--ox-text-3); font-variant-numeric: tabular-nums; }
+
+/* ── Ficha de sustancia en la lista ──────────────────────────────────────── */
+.ap-sust__stats { display: flex; gap: var(--ox-4); font-size: var(--ox-fs-11); color: var(--ox-text-3); font-variant-numeric: tabular-nums; }
+.ap-sust__stats b { color: var(--ox-text-2); font-weight: var(--ox-w-medium); }
+
+/* ── Aviso suave dentro de una vista ─────────────────────────────────────── */
+.ap-aviso {
+  display: flex;
+  gap: var(--ox-3);
+  align-items: flex-start;
+  padding: var(--ox-3) var(--ox-4);
+  border-radius: var(--ox-r-md);
+  background: var(--ox-s2);
+  box-shadow: var(--ox-hairline);
+  font-size: var(--ox-fs-12);
+  color: var(--ox-text-2);
+  line-height: var(--ox-lh);
+}
+.ap-aviso .ox-icon { color: var(--ox-text-3); margin-top: 2px; }
+
+/* ── Notas que se guardan al salir del campo ─────────────────────────────── */
+.ap-notas { min-height: 120px; }

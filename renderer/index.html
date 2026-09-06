@@ -1,0 +1,145 @@
+<meta charset="utf-8">
+<!-- CSP estricta: sin conexiones externas, sin eval. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<title>Apex</title>
+
+<link rel="stylesheet" href="./css/fonts.css">
+<link rel="stylesheet" href="./css/tokens.css">
+<link rel="stylesheet" href="./css/base.css">
+<link rel="stylesheet" href="./css/motion.css">
+<link rel="stylesheet" href="./css/shell.css">
+<link rel="stylesheet" href="./css/controls.css">
+<link rel="stylesheet" href="./css/surfaces.css">
+<link rel="stylesheet" href="./css/overlays.css">
+<link rel="stylesheet" href="./css/apex.css">
+
+<style>
+  /* Boot splash: réplica exacta del primer frame. Pinta ANTES de que cargue
+     ningún módulo, así no hay un solo instante sin identidad en pantalla.
+     El color tiene que ser el mismo backgroundColor de la BrowserWindow —
+     literal, no una variable: los tokens todavía podrían no haber cargado. */
+  #boot-splash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    background: #090c0c;
+    transition: opacity .34s cubic-bezier(.16, 1, .3, 1);
+  }
+  #boot-splash svg { width: 46px; height: 46px; stroke: #22d3ee; fill: none;
+                     stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; }
+  /* La marca se DIBUJA, no aparece: primero la curva, después la línea de base. */
+  #boot-splash path { stroke-dasharray: 26; stroke-dashoffset: 26;
+                      animation: boot-draw .72s cubic-bezier(.16,1,.3,1) forwards; }
+  #boot-splash path:last-of-type { stroke-dasharray: 14; stroke-dashoffset: 14;
+                                   opacity: .34; animation-delay: .1s; }
+  /* El ápice aparece último, cuando la curva ya llegó arriba. */
+  #boot-splash circle { fill: #22d3ee; stroke: none; opacity: 0;
+                        animation: boot-dot .32s cubic-bezier(.16,1,.3,1) .5s forwards; }
+  @keyframes boot-draw { to { stroke-dashoffset: 0 } }
+  @keyframes boot-dot  { to { opacity: 1 } }
+</style>
+
+<div id="boot-splash">
+  <svg viewBox="0 0 16 16">
+    <path d="M2.2 12.4C4.2 12.4 4.9 3.6 7 3.6S9.6 12.4 13.8 12.4"/>
+    <path d="M2.2 12.4H13.8"/>
+    <circle cx="7" cy="3.6" r="1.5"/>
+  </svg>
+</div>
+
+<div class="ox-app">
+
+  <!-- ── Titlebar propia: acá no hay frame nativo ─────────────────────────── -->
+  <header class="ox-titlebar">
+    <div class="ox-brand ox-no-drag" data-tip="Apex" id="brand">
+      <svg class="ox-brand__mark ox-icon" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M2.2 12.4C4.2 12.4 4.9 3.6 7 3.6S9.6 12.4 13.8 12.4"/>
+        <path class="ox-brand__trail" d="M2.2 12.4H13.8"/>
+        <circle cx="7" cy="3.6" r="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="ox-brand__name">Apex</span>
+    </div>
+
+    <button class="ox-iconbtn ox-iconbtn--sm ox-no-drag" id="btn-palette"
+            data-tip="Comandos" data-tip-key="Ctrl K"><i data-icon="search"></i></button>
+
+    <!-- Contexto de la vista actual. Lo llena el router. -->
+    <div class="ox-titlebar__context" id="titlebar-context"></div>
+
+    <div class="ox-wincontrols">
+      <button class="ox-wincontrol" id="win-min"   aria-label="Minimizar"><i data-icon="winMin"></i></button>
+      <button class="ox-wincontrol" id="win-max"   aria-label="Maximizar"><i data-icon="winMax"></i></button>
+      <button class="ox-wincontrol ox-wincontrol--close" id="win-close" aria-label="Cerrar"><i data-icon="winClose"></i></button>
+    </div>
+  </header>
+
+  <div class="ox-body">
+
+    <!-- ── Rail ──────────────────────────────────────────────────────────── -->
+    <nav class="ox-rail">
+      <div class="ox-rail__top">
+        <button class="ox-btn ox-btn--secondary ox-flashable" id="btn-registrar" style="width:100%"
+                data-tip="Registrar una toma" data-tip-key="Ctrl N" data-tip-side="right">
+          <i data-icon="plus"></i> Registrar dosis
+        </button>
+      </div>
+
+      <div class="ox-rail__nav ox-scroll">
+        <div class="ox-rail__group">
+          <button class="ox-navitem" data-view="inicio">
+            <i data-icon="home"></i> Hoy
+          </button>
+          <button class="ox-navitem" data-view="registro">
+            <i data-icon="list"></i> Registro <span class="ox-navitem__count" id="cuenta-dosis">0</span>
+          </button>
+          <button class="ox-navitem" data-view="sustancias">
+            <i data-icon="pill"></i> Sustancias <span class="ox-navitem__count" id="cuenta-sustancias">0</span>
+          </button>
+          <button class="ox-navitem" data-view="graficos">
+            <i data-icon="chart"></i> Gráficos
+          </button>
+        </div>
+
+        <div class="ox-rail__group">
+          <div class="ox-rail__group-label">Sistema</div>
+          <button class="ox-navitem" data-view="piezas">
+            <i data-icon="layers"></i> Piezas
+          </button>
+          <button class="ox-navitem" data-view="ajustes">
+            <i data-icon="settings"></i> Ajustes
+          </button>
+        </div>
+      </div>
+
+      <div class="ox-rail__foot" id="rail-foot"></div>
+    </nav>
+
+    <!-- ── Vista ─────────────────────────────────────────────────────────── -->
+    <main class="ox-main" id="view"></main>
+  </div>
+
+  <!-- ── Statusbar ───────────────────────────────────────────────────────── -->
+  <footer class="ox-statusbar">
+    <div class="ox-statusbar__item" data-tip="Tomas registradas en disco" data-tip-side="top">
+      <i data-icon="list"></i> <span class="ox-statusbar__value ox-num" id="stat-dosis">0</span> tomas
+    </div>
+    <div class="ox-statusbar__item" id="stat-ultima" data-tip="Última toma registrada" data-tip-side="top">
+      <i data-icon="clock"></i> <span class="ox-statusbar__value">—</span>
+    </div>
+    <div class="ox-statusbar__item" id="stat-curso" data-tip="Episodios sin cerrar en las últimas 24 h" data-tip-side="top" hidden>
+      <span class="ox-statusbar__value ox-num">0</span> en curso
+    </div>
+    <div class="ox-spacer"></div>
+    <div class="ox-statusbar__item" id="stat-guardado" data-tip="Último guardado" data-tip-side="top">
+      <i data-icon="save"></i> <span class="ox-statusbar__value">—</span>
+    </div>
+  </footer>
+</div>
+
+<!-- Todos los overlays se portalean acá: fuera del flujo, por encima de todo. -->
+<div id="ox-layer"></div>
+
+<script type="module" src="./js/app.js"></script>
