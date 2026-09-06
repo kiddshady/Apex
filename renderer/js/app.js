@@ -18,6 +18,7 @@ import { fmtDosis } from './format.js';
 import { designHTML, wireDesign } from './design-view.js';
 import { S, api, cargarTodo, pintarChrome, activas, dosis as tomarDosis, sustancia, setContexto } from './tienda.js';
 import { dialogoDosis, dialogoSustancia, dialogoHito, menuDosis, menuSustancia, confirmarBorrarDosis } from './dialogos.js';
+import { initActualizacion } from './actualizacion.js';
 
 import { vistaInicio } from './vistas/inicio.js';
 import { vistaRegistro } from './vistas/registro.js';
@@ -207,6 +208,7 @@ async function boot() {
   setStateLabels({ running: 'En curso', done: 'Cerrado', idle: 'Sin cerrar' });
   cablearShell();
   sincronizarColor();
+  initActualizacion();
 
   try {
     await cargarTodo();

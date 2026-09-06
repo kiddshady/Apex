@@ -31,7 +31,19 @@
 const fsp = require('fs/promises');
 const path = require('path');
 
-const ROOT = process.env.APEX_DATA || path.join(__dirname, '..', 'data');
+/* En desarrollo los datos van al lado del código (`data/`), donde se ven y se
+   versionan. La app INSTALADA no puede escribir en Program Files: ahí van a la
+   carpeta del usuario (%APPDATA%/Apex/data). `APEX_DATA` manda sobre las dos.
+   Fuera de Electron (los tests con Node pelado) `require('electron')` devuelve
+   la ruta del binario y no un módulo, así que cae al default de desarrollo. */
+function raizPorDefecto() {
+  try {
+    const { app } = require('electron');
+    if (app && app.isPackaged) return path.join(app.getPath('userData'), 'data');
+  } catch { /* sin Electron */ }
+  return path.join(__dirname, '..', 'data');
+}
+const ROOT = process.env.APEX_DATA || raizPorDefecto();
 const SETTINGS_FILE = path.join(ROOT, 'settings.json');
 
 /* ── Ajustes de tu app ───────────────────────────────────────────────────────

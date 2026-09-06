@@ -85,12 +85,26 @@ async function armarCSV() {
   return '﻿' + filas.map((f) => f.map(celda).join(';')).join('\r\n') + '\r\n';
 }
 
+/** El repo de GitHub al que apunta el actualizador, para el botón de Ajustes. */
+function repoURL() {
+  try {
+    const pub = require('../package.json').build?.publish;
+    return pub?.owner && pub?.repo ? `https://github.com/${pub.owner}/${pub.repo}` : null;
+  } catch { return null; }
+}
+
 function register() {
+  // Siempre, también en los tests: el renderer pregunta por el estado aunque
+  // el actualizador nunca haya arrancado (en dev no arranca).
+  require('./actualizador.cjs').registrarIPC();
+
   handle('app:info', () => ({
     name: app.getName(),
     version: app.getVersion(),
     dataDir: store.ROOT,
     electron: process.versions.electron,
+    empaquetada: app.isPackaged,
+    repo: repoURL(),
   }));
 
   handle('settings:get', () => store.loadSettings());

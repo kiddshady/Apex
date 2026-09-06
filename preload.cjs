@@ -66,4 +66,16 @@ contextBridge.exposeInMainWorld('apex', {
     json: () => call('exportar:json'),
   },
   abrirCarpeta: () => call('datos:abrir-carpeta'),
+
+  /** Actualizaciones: el principal manda estados, el renderer los muestra. */
+  actualizacion: {
+    estado: () => call('actualizacion:estado'),
+    buscar: () => call('actualizacion:buscar'),
+    instalar: () => ipcRenderer.send('actualizacion:instalar'),
+    onEstado: (cb) => {
+      const handler = (_e, value) => cb(value);
+      ipcRenderer.on('actualizacion:estado', handler);
+      return () => ipcRenderer.off('actualizacion:estado', handler);
+    },
+  },
 });

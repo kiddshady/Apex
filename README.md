@@ -124,6 +124,34 @@ Siguen las reglas del método de dataviz de la casa:
 
 ---
 
+## Instalar, actualizar, publicar
+
+`npm run build` arma el instalador NSIS en `dist/`: `Apex-Setup-<versión>.exe`,
+su `.blockmap` y `latest.yml`. `npm run test:paquete` arranca ese `.exe` de
+verdad y mira que la ventana abra, que el renderer monte (no una pantalla en
+blanco) y que escriba en su carpeta de datos. `npm run release` publica los
+tres archivos como release `v<versión>` en GitHub, con `gh`.
+
+La app instalada guarda los datos en `%APPDATA%/Apex/data` (en desarrollo, en
+`data/` al lado del código). `APEX_DATA` manda sobre las dos.
+
+**Actualizaciones.** Al abrirse, la app instalada consulta el último release,
+descarga la versión nueva en segundo plano y la instala al reiniciar. Sin
+diálogos del sistema: un ítem en la statusbar mientras baja, un toast cuando
+está lista, y la sección Actualizaciones de Ajustes para buscar a mano. En
+desarrollo no hace nada. El chequeo automático es silencioso; solo el manual
+contesta «estás al día».
+
+Para sacar una versión:
+
+```
+npm version patch          # o minor: sube package.json, commitea y etiqueta
+npm run build
+npm run test:paquete
+git push --follow-tags
+npm run release
+```
+
 ## Lo propio del código
 
 ```
@@ -134,13 +162,18 @@ renderer/js/
   dialogos.js      Registrar toma, sustancia, hito; confirmaciones; menús.
   tienda.js        El espejo en memoria de los datos y el chrome.
   vocab.js         Unidades, vías, y el paso del campo de cantidad.
-  iconos-apex.js  Los íconos del dominio (Icons.add, no icons.js).
+  iconos-apex.js   Los íconos del dominio (Icons.add, no icons.js).
+  actualizacion.js El lado renderer de las actualizaciones: statusbar, toast, Ajustes.
   vistas/          Una por sección, más `comunes.js`.
 renderer/css/apex.css   Lo que Onyx no tiene, con prefijo `ap-`.
 src/ipc.cjs              Colecciones permitidas + exportar CSV/JSON + abrir carpeta.
+src/actualizador.cjs     electron-updater contra GitHub Releases, sin diálogos.
+build/make-icon.cjs      Renderiza build/icon.png desde la marca (npm run icon).
+tools/publicar.mjs       Sube el build a un release de GitHub (npm run release).
 test/pk.test.mjs         El cálculo, con fechas locales.
 test/humo.test.cjs       El recorrido entero por la UI, sobre datos temporales.
 test/capturas.cjs        Siembra tres meses de muestra y fotografía cada vista.
+test/empaquetado.test.cjs  Arranca el .exe empaquetado y mira que monte y escriba.
 ```
 
 Los campos de fecha y hora son propios porque `<input type="date">` abre el

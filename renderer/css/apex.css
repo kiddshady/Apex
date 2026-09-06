@@ -370,3 +370,15 @@
 
 /* ── Notas que se guardan al salir del campo ─────────────────────────────── */
 .ap-notas { min-height: 120px; }
+
+/* ── Actualización en la statusbar ───────────────────────────────────────────
+   Es un botón, porque tocarlo instala cuando la versión nueva ya bajó. Cuando
+   está lista se pinta con el acento: es LA acción pendiente de la pantalla. */
+.ap-update { border: 0; background: transparent; font: inherit; color: var(--ox-text-3); cursor: default; }
+.ap-update:hover { color: var(--ox-text); }
+.ap-update .ox-icon { width: 12px; height: 12px; }
+.ap-update .ox-meter { width: 72px; }
+.ap-update.is-lista,
+.ap-update.is-lista .ox-statusbar__value { color: var(--ox-accent); }
+.ap-update.is-lista:hover,
+.ap-update.is-lista:hover .ox-statusbar__value { color: var(--ox-text); }
