@@ -39,11 +39,24 @@ function emitir(patch) {
   return estado;
 }
 
+/** Misma convención que ipc.cjs: {ok, data} | {ok, error}. El preload la
+    desenvuelve; devolver el estado crudo hacía que un estado con `error`
+    adentro se leyera como una falla del canal. */
+function handle(canal, fn) {
+  ipcMain.handle(canal, async (_e, ...args) => {
+    try {
+      return { ok: true, data: await fn(...args) };
+    } catch (err) {
+      return { ok: false, error: err?.message || String(err) };
+    }
+  });
+}
+
 /** Los handlers IPC. Se registran siempre —también en los tests— para que el
     renderer pueda preguntar aunque el actualizador nunca haya arrancado. */
 function registrarIPC() {
-  ipcMain.handle('actualizacion:estado', () => estado);
-  ipcMain.handle('actualizacion:buscar', () => buscar(true));
+  handle('actualizacion:estado', () => estado);
+  handle('actualizacion:buscar', () => buscar(true));
   ipcMain.on('actualizacion:instalar', () => {
     if (!autoUpdater || estado.fase !== 'listo') return;
     // Silencioso y volver a abrir: el instalador NSIS corre sin ventana y la

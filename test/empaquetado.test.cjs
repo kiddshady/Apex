@@ -19,6 +19,9 @@ const { app } = require('electron');
 const assert = require('node:assert');
 const { spawn, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
+// Dentro de Electron, `fs` trata a un .asar como carpeta. Para leer el archivo
+// tal cual está en disco hace falta el fs sin parchar.
+const ofs = require('original-fs');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -103,7 +106,7 @@ app.whenReady().then(async () => {
   await prueba('la fuente empaquetada y su licencia viajan adentro', () => {
     const asar = path.join(DESEMPACADA, 'resources', 'app.asar');
     assert.ok(fs.existsSync(asar), 'no está app.asar');
-    const bytes = fs.readFileSync(asar);
+    const bytes = ofs.readFileSync(asar);
     // El índice del asar es texto: los nombres de archivo se leen tal cual.
     const cabecera = bytes.subarray(0, 64 * 1024).toString('latin1');
     assert.ok(cabecera.includes('roboto-mono-latin-400-normal.woff2'), 'la fuente no está en el asar');
@@ -167,6 +170,7 @@ app.whenReady().then(async () => {
   await prueba('el puente de actualizaciones responde con la versión del paquete', async () => {
     const e = await cdpEvaluar(PUERTO, `window.apex.actualizacion.estado()`);
     assert.ok(e && typeof e.fase === 'string', `estado raro: ${JSON.stringify(e)}`);
+    assert.ok(['buscando', 'al-dia', 'disponible', 'descargando', 'listo', 'error'].includes(e.fase), `fase inesperada: ${e.fase}`);
     assert.equal(e.version, VERSION, `la app dice ser ${e.version}`);
     // Empaquetada, el actualizador ARRANCA: nunca queda «inactivo por dev».
     assert.ok(e.motivo !== 'dev', 'la app empaquetada cree que está en desarrollo');
