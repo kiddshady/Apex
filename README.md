@@ -135,6 +135,13 @@ tres archivos como release `v<versión>` en GitHub, con `gh`.
 La app instalada guarda los datos en `%APPDATA%/Apex/data` (en desarrollo, en
 `data/` al lado del código). `APEX_DATA` manda sobre las dos.
 
+**Bandeja.** Apex vive al lado del reloj mientras corre. La X esconde la
+ventana en vez de cerrar la app —se vuelve desde el ícono, y desde ahí también
+se cierra del todo—; la perilla está en Ajustes → Ventana, por si preferís que
+la X cierre como cualquier otra ventana. Y hay una sola Apex a la vez: abrirla
+de nuevo trae la que ya estaba en lugar de arrancar una segunda sobre los
+mismos JSON.
+
 **Actualizaciones.** Al abrirse, la app instalada consulta el último release,
 descarga la versión nueva en segundo plano y la instala al reiniciar. Sin
 diálogos del sistema: un ítem en la statusbar mientras baja, un toast cuando
@@ -168,6 +175,7 @@ renderer/js/
 renderer/css/apex.css   Lo que Onyx no tiene, con prefijo `ap-`.
 src/ipc.cjs              Colecciones permitidas + exportar CSV/JSON + abrir carpeta.
 src/actualizador.cjs     electron-updater contra GitHub Releases, sin diálogos.
+src/bandeja.cjs          El ícono junto al reloj: esconder al cerrar, y volver.
 build/make-icon.cjs      Renderiza build/icon.png desde la marca (npm run icon).
 tools/publicar.mjs       Sube el build a un release de GitHub (npm run release).
 test/pk.test.mjs         El cálculo, con fechas locales.

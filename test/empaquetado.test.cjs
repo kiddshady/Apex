@@ -13,6 +13,7 @@
      1. ¿Están los tres archivos que el actualizador necesita, y son coherentes?
      2. ¿El .exe arranca, abre ventana y escribe en su carpeta de datos?
      3. ¿El renderer montó de verdad, y el puente de actualizaciones responde?
+     4. ¿La X esconde en la bandeja, y abrir de nuevo trae la ventana que hay?
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const { app } = require('electron');
@@ -40,6 +41,15 @@ const prueba = async (nombre, fn) => {
   catch (err) { fallaron++; console.log('  FALLA ' + nombre + '\n        ' + (err.message || err)); }
 };
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** El título de la ventana principal de un proceso, o '' si no tiene ninguna
+    VISIBLE: una ventana escondida en la bandeja no cuenta, que es justo lo que
+    deja mirar si la X escondió o cerró. */
+function tituloVentana(pid) {
+  return execFileSync('powershell', ['-NoProfile', '-Command',
+    `Get-Process -Id ${pid} -ErrorAction SilentlyContinue | ` +
+    'Select-Object -ExpandProperty MainWindowTitle'], { encoding: 'utf8' }).trim();
+}
 
 /**
  * Evalúa una expresión adentro del renderer de la app EMPAQUETADA, hablando
@@ -103,7 +113,7 @@ app.whenReady().then(async () => {
       `app-update.yml no apunta a ${pkg.build.publish.owner}/${pkg.build.publish.repo}`);
   });
 
-  await prueba('la fuente empaquetada y su licencia viajan adentro', () => {
+  await prueba('los assets de runtime viajan adentro (fuente, licencia, ícono)', () => {
     const asar = path.join(DESEMPACADA, 'resources', 'app.asar');
     assert.ok(fs.existsSync(asar), 'no está app.asar');
     const bytes = ofs.readFileSync(asar);
@@ -115,6 +125,10 @@ app.whenReady().then(async () => {
     const fonts = indice.files?.renderer?.files?.fonts?.files || {};
     assert.ok(fonts['roboto-mono-latin-400-normal.woff2'], 'la fuente no está en el asar');
     assert.ok(fonts['Roboto-Mono-LICENSE.txt'], 'la licencia de la fuente no viaja (la OFL lo exige)');
+    // Sin el PNG no hay ícono de bandeja, y sin ícono de bandeja no hay forma
+    // de volver a la ventana una vez que la X la esconde.
+    assert.ok(indice.files?.build?.files?.['icon.png'], 'el ícono de la bandeja no está en el asar');
+    assert.ok(!indice.files?.build?.files?.['make-icon.cjs'], 'el generador del ícono se coló en el paquete');
     assert.ok(!indice.files?.test, 'los tests se colaron en el paquete');
     assert.ok(!indice.files?.tools && !indice.files?.docs, 'tools/ o docs/ se colaron en el paquete');
   });
@@ -128,7 +142,7 @@ app.whenReady().then(async () => {
 
   await prueba('el .exe arranca, abre ventana y escribe en su carpeta de datos', async () => {
     assert.ok(fs.existsSync(EXE), 'no está Apex.exe');
-    hijo = spawn(EXE, [`--remote-debugging-port=${PUERTO}`], {
+    hijo = spawn(EXE, [`--remote-debugging-port=${PUERTO}`, `--user-data-dir=${datos}`], {
       env: { ...process.env, APEX_DATA: datos },
       detached: false, stdio: 'ignore',
     });
@@ -138,9 +152,7 @@ app.whenReady().then(async () => {
     await dormir(9000);
     assert.equal(murio, null, `el proceso se murió solo (código ${murio})`);
 
-    const titulos = execFileSync('powershell', ['-NoProfile', '-Command',
-      `Get-Process -Id ${hijo.pid} -ErrorAction SilentlyContinue | ` +
-      'Select-Object -ExpandProperty MainWindowTitle'], { encoding: 'utf8' }).trim();
+    const titulos = tituloVentana(hijo.pid);
     assert.ok(titulos.includes('Apex'), `la ventana no tiene título "Apex" (vi: "${titulos}")`);
 
     /* Al moverse a su posición final la ventana guarda su estado: si ese
@@ -180,6 +192,35 @@ app.whenReady().then(async () => {
     assert.equal(e.version, VERSION, `la app dice ser ${e.version}`);
     // Empaquetada, el actualizador ARRANCA: nunca queda «inactivo por dev».
     assert.ok(e.motivo !== 'dev', 'la app empaquetada cree que está en desarrollo');
+  });
+
+  /* La bandeja, probada donde importa. Son dos mitades de lo mismo: si la X
+     esconde pero nada la trae de vuelta, la app quedó de zombi; y si la
+     segunda instancia abre su propia ventana, hay dos Apex escribiendo los
+     mismos JSON. */
+  await prueba('la X esconde en la bandeja en vez de cerrar Apex', async () => {
+    await cdpEvaluar(PUERTO, `window.onyx.win.close()`);
+    await dormir(1500);
+    assert.equal(hijo.exitCode, null, 'cerrar la ventana mató el proceso: no quedó nada en la bandeja');
+    assert.equal(tituloVentana(hijo.pid), '', 'la ventana sigue visible después de cerrarla');
+  });
+
+  /* El `--user-data-dir` es el mismo a propósito: es lo que las pone a competir
+     por el mismo lock, igual que dos accesos directos en la misma máquina. */
+  await prueba('abrir Apex de nuevo trae la que ya estaba, sin arrancar otra', async () => {
+    const segunda = spawn(EXE, [`--user-data-dir=${datos}`], {
+      env: { ...process.env, APEX_DATA: datos },
+      detached: false, stdio: 'ignore',
+    });
+    const salida = await new Promise((listo) => {
+      const reloj = setTimeout(() => listo('sigue viva'), 12000);
+      segunda.on('exit', (code) => { clearTimeout(reloj); listo(code); });
+    });
+    if (salida === 'sigue viva') { try { segunda.kill(); } catch { /* ya murió */ } }
+    assert.notEqual(salida, 'sigue viva', 'la segunda instancia se quedó corriendo');
+    assert.equal(hijo.exitCode, null, 'la segunda instancia se llevó puesta a la primera');
+    await dormir(1200);
+    assert.ok(tituloVentana(hijo.pid).includes('Apex'), 'la ventana escondida no volvió al frente');
   });
 
   if (hijo && hijo.exitCode === null) { try { hijo.kill(); } catch { /* ya murió */ } }

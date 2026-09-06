@@ -93,7 +93,12 @@ function repoURL() {
   } catch { return null; }
 }
 
-function register() {
+/**
+ * Registra los handlers. `onAjustes` le avisa al principal cuando cambian los
+ * ajustes: hay perillas que él tiene que tener en la mano —si la X esconde o
+ * cierra— y que no puede ir a buscar al disco en medio de un evento síncrono.
+ */
+function register({ onAjustes } = {}) {
   // Siempre, también en los tests: el renderer pregunta por el estado aunque
   // el actualizador nunca haya arrancado (en dev no arranca).
   require('./actualizador.cjs').registrarIPC();
@@ -108,7 +113,11 @@ function register() {
   }));
 
   handle('settings:get', () => store.loadSettings());
-  handle('settings:save', (patch) => store.saveSettings(patch));
+  handle('settings:save', async (patch) => {
+    const ajustes = await store.saveSettings(patch);
+    onAjustes?.(ajustes);
+    return ajustes;
+  });
 
   handle('doc:read', (name, fallback = null) => store.doc(name, fallback).read());
   handle('doc:write', (name, data) => store.doc(name).write(data).then(() => true));

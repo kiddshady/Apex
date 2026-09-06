@@ -53,6 +53,8 @@ const SCHEMA = 1;
 
 const DEFAULT_SETTINGS = {
   schema: SCHEMA,
+  /** Con la X, ¿Apex se esconde en la bandeja en vez de cerrarse? */
+  cerrarAlTray: true,
   /** Unidad que propone el diálogo de sustancia nueva. */
   unidadDefault: 'mg',
   /** Rango que abre el Registro: 7d · 30d · 90d · 1a · todo */

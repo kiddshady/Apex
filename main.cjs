@@ -36,6 +36,7 @@ const path = require('path');
 const ipc = require('./src/ipc.cjs');
 const store = require('./src/store.cjs');
 const actualizador = require('./src/actualizador.cjs');
+const bandeja = require('./src/bandeja.cjs');
 
 /* Color base de arranque. Tiene que coincidir con --ox-bg de tokens.css.
    Como --ox-bg es oklch y Electron solo entiende hex, el renderer se lo vuelve
@@ -51,6 +52,24 @@ const MIN_H = 600;
 
 /** @type {BrowserWindow | null} */
 let win = null;
+
+/* ── Cerrar la ventana no es cerrar Apex ─────────────────────────────────────
+   Con `cerrarAlTray` la X esconde la ventana y la app sigue viva en la
+   bandeja. Eso convierte al cierre en algo que hay que poder DESACTIVAR desde
+   adentro, porque si no la app no se muere nunca: `saliendo` es esa llave, y
+   la levantan los tres cierres legítimos —el menú de la bandeja, un reinicio
+   para actualizar, y el apagado de Windows—. */
+let saliendo = false;
+let cerrarAlTray = true;
+
+/** Traer la ventana al frente desde donde esté: escondida, minimizada, o
+    simplemente tapada por otra app. */
+function mostrarVentana() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+}
 
 /* ── Estado de la ventana ────────────────────────────────────────────────────
    Recordar tamaño y posición entre sesiones. La trampa: si el monitor donde
@@ -155,6 +174,15 @@ function createWindow(state) {
   });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
+  /* La X, Alt+F4 y `win:close` terminan todos acá. Esconder en vez de cerrar
+     deja la ventana viva: al volver ya está cargada, con su estado y su scroll
+     donde estaban, y no hay que pagar el arranque de nuevo. */
+  win.on('close', (e) => {
+    if (saliendo || !cerrarAlTray) return;
+    e.preventDefault();
+    win.hide();
+  });
+
   win.on('closed', () => { win = null; });
 }
 
@@ -177,12 +205,43 @@ ipcMain.on('win:set-bg', (_e, hex) => {
   }
 });
 
-app.whenReady().then(async () => {
-  ipc.register();
-  createWindow(await loadWindowState());
-  // Solo hace algo en la app instalada; en dev deja el estado en «inactivo».
-  actualizador.iniciar(() => win);
-});
+/* ── Una sola Apex a la vez ──────────────────────────────────────────────────
+   Dos instancias es peor que molesto: las dos escriben los mismos JSON, y la
+   segunda además abriría una ventana nueva mientras la primera está escondida
+   en la bandeja —parecería que se perdieron los datos, cuando lo que pasa es
+   que hay dos apps—. La que llega segunda le pasa el turno a la que ya estaba
+   y se va sin tocar nada. */
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  // Abrir Apex de nuevo (el acceso directo, el .exe) no arranca otra: trae al
+  // frente la que ya está corriendo, que es lo que la persona quería.
+  app.on('second-instance', mostrarVentana);
+
+  app.whenReady().then(async () => {
+    const ajustes = await store.loadSettings().catch(() => null);
+    cerrarAlTray = ajustes?.cerrarAlTray !== false;
+    // El ajuste se lee acá una vez y se refresca cuando lo tocan en Ajustes:
+    // `close` es síncrono y no puede esperar a que el disco conteste.
+    ipc.register({ onAjustes: (a) => { cerrarAlTray = a?.cerrarAlTray !== false; } });
+
+    createWindow(await loadWindowState());
+    bandeja.crear({
+      mostrar: mostrarVentana,
+      salir: () => { saliendo = true; app.quit(); },
+    });
+    // Solo hace algo en la app instalada; en dev deja el estado en «inactivo».
+    actualizador.iniciar(() => win);
+  });
+}
+
+/* Un reinicio para instalar la actualización también pasa por acá: el
+   `quitAndInstall` del actualizador dispara `before-quit`, y sin esta línea
+   la ventana lo bloquearía escondiéndose. */
+app.on('before-quit', () => { saliendo = true; });
+// Apagar o cerrar sesión de Windows: lo mismo, pero sin poder decir que no.
+app.on('session-end', () => { saliendo = true; });
+app.on('will-quit', () => bandeja.destruir());
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

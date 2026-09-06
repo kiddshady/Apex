@@ -36,6 +36,25 @@ export function vistaAjustes() {
         </div>
 
         <div class="ox-section">
+          <div class="ox-section__head"><span class="ox-section__title">Ventana</span></div>
+          <div class="ox-card"><div class="ox-card__body">
+            <label class="ox-row" style="gap:16px;justify-content:space-between">
+              <span class="ox-col" style="gap:3px">
+                <span class="ox-label">Al cerrar, seguir en la bandeja</span>
+                <span class="ox-meta">La X esconde la ventana en vez de cerrar Apex.</span>
+              </span>
+              <button type="button" class="ox-switch${a.cerrarAlTray !== false ? ' is-on' : ''}" id="set-tray"
+                role="switch" aria-checked="${a.cerrarAlTray !== false}" aria-label="Al cerrar, seguir en la bandeja"></button>
+            </label>
+            <p class="ox-meta" style="margin-top:14px;line-height:1.65">
+              Apex vive al lado del reloj mientras corre: desde ahí se abre de nuevo, y desde ahí se
+              cierra del todo. Apagado, la X cierra la app como cualquier otra ventana. Abrir Apex
+              cuando ya está abierto nunca arranca una segunda: trae al frente la que hay.
+            </p>
+          </div></div>
+        </div>
+
+        <div class="ox-section">
           <div class="ox-section__head"><span class="ox-section__title">Actualizaciones</span></div>
           <div class="ox-card"><div class="ox-card__body">
             <div class="ox-kv">
@@ -98,6 +117,14 @@ export function vistaAjustes() {
     </div>`);
 
   bindSwitcher(document.getElementById('set-rango'), (v) => guardarAjustes({ rangoRegistro: v }));
+
+  const swTray = document.getElementById('set-tray');
+  swTray.addEventListener('click', () => {
+    const on = !swTray.classList.contains('is-on');
+    swTray.classList.toggle('is-on', on);
+    swTray.setAttribute('aria-checked', String(on));
+    guardarAjustes({ cerrarAlTray: on });
+  });
   bindSelect(document.getElementById('set-unidad'), UNIDADES.map((u) => ({ value: u, label: u })), {
     valor: a.unidadDefault || 'mg',
     onChange: (v) => guardarAjustes({ unidadDefault: v }),

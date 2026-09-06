@@ -38,6 +38,7 @@
       "renderer/**/*",
       "package.json",
       "!build/**",
+      "build/icon.png",
       "!data/**",
       "!test/**",
       "!dist/**",
