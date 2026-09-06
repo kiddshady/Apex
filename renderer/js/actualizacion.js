@@ -95,8 +95,12 @@ function aplicar(e) {
 export async function buscarActualizacion() {
   if (!apex?.actualizacion) return estado;
   try {
-    aplicar(await apex.actualizacion.buscar());
+    // La respuesta no se aplica: el principal ya empujó ese mismo estado por
+    // el canal (`onEstado`). Aplicarlo también acá contestaba dos veces al
+    // mismo chequeo —dos toasts idénticos de «Estás al día».
+    await apex.actualizacion.buscar();
   } catch (err) {
+    // Que falle el canal en sí no viaja por el canal: eso sí se aplica acá.
     aplicar({ ...estado, fase: 'error', error: err.message, manual: true });
   }
   return estado;
