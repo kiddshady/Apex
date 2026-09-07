@@ -16,7 +16,7 @@ export function vistaDosis(id) {
   const d = tomarDosis(id);
   if (!d) {
     setContexto('');
-    paint(head({ title: 'No encontrada', crumbs: [{ label: 'Registro', view: 'registro' }, { label: id }] })
+    paint(head({ title: 'No encontrada', linea: true, crumbs: [{ label: 'Registro', view: 'registro' }, { label: id }] })
       + empty({ icon: 'alert', title: `No existe la toma ${id}`, text: 'Puede que la hayas borrado, o que el archivo ya no esté en la carpeta de datos.' }));
     return;
   }
@@ -32,6 +32,7 @@ export function vistaDosis(id) {
     title: etiquetaDosis(d),
     sub: `${fmtDiaLargo(d.at)} · ${fmtHM(d.at)}${d.via ? ` · ${viaLabel(d.via)}` : ''}`,
     crumbs: [{ label: 'Registro', view: 'registro' }, { label: `${fmtDiaSemana(d.at)} ${fmtHM(d.at)}` }],
+    linea: true,
     actions: `
       <button class="ox-btn ox-btn--primary ox-flashable" data-hito="${esc(d.id)}">${Icons.svg('hito')} Agregar hito</button>
       <button class="ox-iconbtn" data-menu="dosis" data-menu-arg="${esc(d.id)}" data-tip="Más">${Icons.svg('more')}</button>`,

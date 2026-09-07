@@ -130,12 +130,12 @@ contenido no se pierde en la nada sino que muere contra un borde.
 Modificadores: `--line-top` · `--line-bottom` (y `--line-left` · `--line-right`
 en `.ox-scroll-x`). El shell ya los aplica donde corresponde, y con `:has()`, así
 que si sacás la pieza que cerraba ese lado el fade vuelve solo: rail contra su
-pie, inspector contra el suyo, vista contra la statusbar, paleta entre buscador y
-pie, modal contra su pie. **El menú no esfuma nunca** — su hairline lo cierra por
-los cuatro lados, y como máscara y borde viven en el mismo elemento, el fade le
-comía el propio hairline. El tamaño lo da `--ox-fade`, y el contenedor lleva
-padding ≥ ese valor para que en reposo la banda no coma el primer ni el último
-ítem.
+pie, inspector contra el suyo, vista contra la statusbar y contra un encabezado
+con línea, paleta entre buscador y pie, modal contra su pie. **El menú no esfuma
+nunca** — su hairline lo cierra por los cuatro lados, y como máscara y borde
+viven en el mismo elemento, el fade le comía el propio hairline. El tamaño lo da
+`--ox-fade`, y el contenedor lleva padding ≥ ese valor para que en reposo la
+banda no coma el primer ni el último ítem.
 
 `.ox-title` · `.ox-subtitle` · `.ox-display` · `.ox-label` · `.ox-meta` ·
 `.ox-eyebrow` (versalita espaciada) · `.ox-mono` · `.ox-num` (tabular) ·
@@ -184,7 +184,10 @@ La titlebar entera es zona de arrastre; lo que sea clickeable lleva
 
 ### Dentro de la vista
 
-`head({ title, sub, crumbs, actions })` de `ui.js` arma el `.ox-viewhead`.
+`head({ title, sub, crumbs, actions, linea })` de `ui.js` arma el
+`.ox-viewhead`. Con `linea: true` el encabezado se cierra con su hairline en vez
+de cortar al aire, y el shell le apaga solo el esfumado de arriba al scroll de
+esa vista: la línea ya es el límite.
 
 Hay dos layouts. El simple, que es el 90% de las vistas:
 
