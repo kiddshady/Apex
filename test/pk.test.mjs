@@ -28,7 +28,11 @@ es('faseInfo(pico).label', pk.faseInfo('pico').label, 'Pico');
 es('una fase desconocida cae en nota', pk.faseInfo('zzz').id, 'nota');
 es('con fin → done', pk.estadoDosis(d1, t0 + 3 * HORA), 'done');
 es('reciente sin fin → running', pk.estadoDosis({ ...d1, hitos: [] }, t0 + 3 * HORA), 'running');
-es('vieja sin fin → idle', pk.estadoDosis({ ...d1, hitos: [] }, t0 + 30 * HORA), 'idle');
+es('justo antes de las 24 h sigue en curso', pk.estadoDosis({ ...d1, hitos: [] }, t0 + 24 * HORA - MIN), 'running');
+// Pasado el día entero se separan los dos casos: la toma que nunca registró un
+// hito se cierra sola, la que registró y quedó sin «fin» sigue abierta.
+es('vieja y sin un solo hito → done', pk.estadoDosis({ ...d1, hitos: [] }, t0 + 30 * HORA), 'done');
+es('vieja con hitos y sin fin → idle', pk.estadoDosis({ ...d1, hitos: d1.hitos.slice(0, 3) }, t0 + 30 * HORA), 'idle');
 
 console.log('\n2. Días en hora local');
 es('diaISO', pk.diaISO(t0), '2026-09-05');

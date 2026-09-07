@@ -42,13 +42,20 @@ export function ordenarHitos(hitos = []) {
 /**
  * El estado de un episodio, con las palabras del sistema de estado de Onyx:
  *   running → sin «fin» y dentro de las últimas 24 h: todavía está pasando.
- *   done    → tiene un hito de fin.
- *   idle    → viejo y sin cierre: quedó abierto y ya no importa.
+ *   done    → tiene un hito de fin, o pasó el día entero sin un solo hito.
+ *   idle    → viejo, con hitos y sin cierre: quedó abierto por la mitad.
+ *
+ * Que la toma SIN hitos se cierre sola es a propósito. Pasadas las 24 h ya no
+ * hay episodio que seguir, y «sin cerrar» prometía un cierre que nunca iba a
+ * llegar: nadie vuelve a marcarle el fin a una toma de anteayer que jamás
+ * registró nada. Con hitos y sin «fin» sí queda abierta — ahí alguien estaba
+ * siguiendo el episodio y lo dejó por la mitad, y eso hay que verlo.
  */
 export function estadoDosis(d, ahora = Date.now()) {
-  if ((d.hitos || []).some((h) => h.fase === 'fin')) return 'done';
+  const hitos = d.hitos || [];
+  if (hitos.some((h) => h.fase === 'fin')) return 'done';
   if (ahora - d.at < 24 * HORA) return 'running';
-  return 'idle';
+  return hitos.length ? 'idle' : 'done';
 }
 
 /* ── Días ────────────────────────────────────────────────────────────────────
