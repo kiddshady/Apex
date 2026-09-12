@@ -80,7 +80,7 @@ export function vistaSustancia(id) {
   const s = sustancia(id);
   if (!s) {
     setContexto('');
-    paint(head({ title: 'No encontrada', crumbs: [{ label: 'Sustancias', view: 'sustancias' }, { label: id }] })
+    paint(head({ title: 'No encontrada', linea: true, crumbs: [{ label: 'Sustancias', view: 'sustancias' }, { label: id }] })
       + empty({ icon: 'alert', title: `No existe ${id}`, text: 'Puede que la hayas eliminado.' }));
     return;
   }
@@ -101,6 +101,7 @@ export function vistaSustancia(id) {
       s.archivada ? 'archivada' : null,
     ].filter(Boolean).join(' · '),
     crumbs: [{ label: 'Sustancias', view: 'sustancias' }, { label: s.nombre }],
+    linea: true,
     actions: `
       <button class="ox-btn ox-btn--primary ox-flashable" data-rapida="${esc(s.id)}">${Icons.svg('plus')} Registrar dosis</button>
       <button class="ox-iconbtn" data-menu="sustancia" data-menu-arg="${esc(s.id)}" data-tip="Más">${Icons.svg('more')}</button>`,
