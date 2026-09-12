@@ -195,7 +195,10 @@ La titlebar entera es zona de arrastre; lo que sea clickeable lleva
 `head({ title, sub, crumbs, actions, linea })` de `ui.js` arma el
 `.ox-viewhead`. Con `linea: true` el encabezado se cierra con su hairline en vez
 de cortar al aire, y el shell le apaga solo el esfumado de arriba al scroll de
-esa vista: la línea ya es el límite.
+esa vista: la línea ya es el límite. Con inspector no hace falta pedirla: el
+panel es de otro plano y arranca con un borde duro justo debajo del encabezado,
+así que si la columna principal se esfumara arriba el encabezado se vería
+derretido de un lado y sólido del otro — el shell le pone la línea solo.
 
 Hay dos layouts. El simple, que es el 90% de las vistas:
 
@@ -425,7 +428,7 @@ degrada sola.
 
 ```js
 paint(html)                        // innerHTML + monta íconos + cablea fades
-head({ title, sub, crumbs, actions })
+head({ title, sub, crumbs, actions, linea })
 empty({ icon, title, text, actions })
 esc(str)                           // TODO dato de afuera pasa por acá
 mark(state, shape) / status(state, opts)
