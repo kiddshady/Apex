@@ -319,6 +319,17 @@
 .ap-tabla { margin-top: var(--ox-3); max-height: 260px; }
 .ap-tabla .ox-table td { padding: 5px var(--ox-3); }
 
+/* Las columnas numéricas de las tablas van centradas, no a la derecha como trae
+   la plantilla. Es gusto de esta app y no del sistema: acá los valores de una
+   columna miden lo mismo (una hora, una dosis, una cifra de 0 a 10) y centrados
+   caen justo debajo de su título; a la derecha, un «8» o un «—» quedaban lejos
+   de la etiqueta y parecían escaparse de la columna. En una tabla de largos
+   variables —precios— la derecha alinea por magnitud y esto habría que sacarlo.
+   Título y celda juntos para que las dos mitades no se puedan desencontrar; la
+   del th empata en especificidad con la del sistema y gana por venir después. */
+.ox-table th.ox-td--num,
+.ox-table td.ox-td--num { text-align: center; }
+
 /* ── Perfil farmacocinético: las cifras del patrón ───────────────────────── */
 .ap-perfil {
   display: grid;

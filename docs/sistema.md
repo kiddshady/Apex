@@ -27,6 +27,14 @@ componente escribe un valor crudo.
 La croma crece con la luminancia: un plano claro necesita más temperatura que
 uno oscuro para no verse lavado.
 
+**`--ox-surface` es «la superficie sobre la que estoy».** La declara cada plano
+que aloja contenido —la base (`--ox-bg`), `.ox-card` (`--ox-s2`),
+`.ox-inspector` (`--ox-s1`), `.ox-modal` (`--ox-s3`)— en el mismo renglón
+donde pinta su fondo, y pinta con ella, así las dos no se pueden desencontrar. La
+lee lo que necesita ser opaco del color de su entorno sin saber dónde cayó: hoy,
+el encabezado sticky de `.ox-table`. Si armás un plano nuevo que pueda alojar
+contenido, declarala.
+
 ### Texto — escalera de énfasis
 
 `--ox-text` (primario, nunca blanco puro) · `--ox-text-2` (secundario) ·
@@ -284,7 +292,19 @@ el SVG corrido más de medio píxel o desbordando.
 Las acciones van en `.ox-rowactions` (aparecen con el hover).
 
 `.ox-table` + `.ox-tr`; `.ox-td--num` alinea a la derecha con cifras tabulares,
-`.ox-td--tight` achica el padding.
+`.ox-td--tight` achica el padding. El `<th>` es sticky y por eso opaco: pinta
+`--ox-surface`, la superficie donde cayó la tabla, y no un plano fijo — con
+`--ox-bg` a secas, dentro de una card el encabezado quedaba más oscuro que sus
+propias filas. El de humo lo mide sobre la vista y dentro de una card.
+
+**`.ox-td--num` va también en el `<th>`, no solo en las celdas.** Si el
+encabezado no la lleva, el título se queda a la izquierda mientras los números
+van a la derecha y la columna se lee corrida — los valores no caen debajo de su
+propio título. Y ojo, que la clase esté puesta no alcanzaba: `.ox-table th`
+trae `text-align: left` con especificidad (0,1,1) y le ganaba a `.ox-td--num`
+(0,1,0), así que el `<th>` marcado seguía alineando mal. Por eso existe la
+regla `.ox-table th.ox-td--num`. Se descubrió en una tabla de precios de cuatro
+columnas numéricas, con 82px de desfase; el de humo lo mide.
 
 `.ox-kv` para pares clave/valor (`__k` / `__v`). El valor va en **una línea** y
 lo que no entra se elipsa; el que tiene que envolver —un SMILES, un hash largo—
