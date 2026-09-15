@@ -7,8 +7,8 @@
    hace sin pelear.
 
    Las reglas que siguen todos:
-   · Un solo acento por gráfico. La serie principal es el acento; lo que es
-     contexto va en gris. Nunca una paleta de colores por serie.
+   · Una serie usa el acento. La comparación de sustancias admite hasta tres
+     colores fijos, reforzados por trazos distintos; el contexto va en gris.
    · Marcas finas: línea de 2 px, puntos de 8 px con anillo del color de la
      superficie, área al 10 %. La grilla es un hairline sólido y recesivo.
    · El texto viste tokens de texto, nunca el color de la serie.
@@ -94,24 +94,27 @@ function tipHTML(valor, etiqueta) {
   return `<span class="ap-chart__tip__val">${esc(valor)}</span><span class="ap-chart__tip__lab">${esc(etiqueta)}</span>`;
 }
 
-/* ══ Líneas: una serie por día ═══════════════════════════════════════════════ */
+/* ══ Líneas: una o varias series por día ═════════════════════════════════════ */
 
 /**
- * grafLinea(el, { puntos: [{ x: ms, y, extra? }], unidad, enteros })
- * Una sola serie: el título de la tarjeta dice qué es, no hace falta leyenda.
+ * grafLinea(el, { puntos, series?: [{ label, puntos }], unidad, enteros })
+ * La forma histórica de una sola serie sigue usando `puntos`. Al comparar
+ * sustancias, `series` comparte fechas y escala y agrega leyenda + hover común.
  */
 export function grafLinea(el, o) {
   el.classList.add('ap-chart');
   return observarAncho(el, (W) => dibujarLinea(el, W, o));
 }
 
-function dibujarLinea(el, W, { puntos = [], unidad = '', enteros = false, sinDatos = 'Sin tomas en este rango' }) {
+function dibujarLinea(el, W, { puntos = [], series = null, unidad = '', enteros = false, sinDatos = 'Sin tomas en este rango' }) {
   const H = 230;
   const m = { t: 20, r: 20, b: 30, l: 48 };
   const pw = Math.max(10, W - m.l - m.r);
   const ph = H - m.t - m.b;
-  const n = puntos.length;
-  const max = Math.max(0, ...puntos.map((p) => Number(p.y) || 0));
+  const listas = series?.length ? series : [{ id: 'unica', label: '', puntos }];
+  const eje = listas[0]?.puntos || [];
+  const n = eje.length;
+  const max = Math.max(0, ...listas.flatMap((s) => s.puntos.map((p) => Number(p.y) || 0)));
   if (!n || max <= 0) return vacio(el, sinDatos, H);
 
   const ticks = ticksLindos(max, 4, enteros);
@@ -135,47 +138,66 @@ function dibujarLinea(el, W, { puntos = [], unidad = '', enteros = false, sinDat
   let ejeX = '';
   for (const i of idx) {
     const anchor = i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle';
-    ejeX += `<text class="ap-tick" x="${r1(X(i))}" y="${H - 9}" text-anchor="${anchor}">${esc(fmtDiaCorto(puntos[i].x))}</text>`;
+    ejeX += `<text class="ap-tick" x="${r1(X(i))}" y="${H - 9}" text-anchor="${anchor}">${esc(fmtDiaCorto(eje[i].x))}</text>`;
   }
 
-  const d = puntos.map((p, i) => `${i ? 'L' : 'M'}${r1(X(i))} ${r1(Y(p.y))}`).join('');
-  const area = n > 1 ? `${d}L${r1(X(n - 1))} ${r1(Y(0))}L${r1(X(0))} ${r1(Y(0))}Z` : '';
-  const puntosSVG = n <= 130
-    ? puntos.map((p, i) => (p.y > 0 ? `<circle class="ap-punto" cx="${r1(X(i))}" cy="${r1(Y(p.y))}" r="3.5"/>` : '')).join('')
-    : '';
+  const marcas = listas.map((serie, si) => {
+    const d = serie.puntos.map((p, i) => `${i ? 'L' : 'M'}${r1(X(i))} ${r1(Y(p.y))}`).join('');
+    const area = listas.length === 1 && n > 1
+      ? `${d}L${r1(X(n - 1))} ${r1(Y(0))}L${r1(X(0))} ${r1(Y(0))}Z`
+      : '';
+    const puntosSVG = n <= 130
+      ? serie.puntos.map((p, i) => (p.y > 0 ? `<circle class="ap-punto" data-serie="${si}" cx="${r1(X(i))}" cy="${r1(Y(p.y))}" r="3.5"/>` : '')).join('')
+      : '';
+    return `${area ? `<path class="ap-area" d="${area}"/>` : ''}<path class="ap-linea" data-serie="${si}" d="${d}"/>${puntosSVG}`;
+  }).join('');
 
   // Una sola etiqueta directa: el máximo. El resto lo dice el eje y el hover.
-  const iMax = puntos.findIndex((p) => p.y === max);
-  const lx = X(iMax);
-  const anchorMax = lx < m.l + 36 ? 'start' : lx > W - m.r - 36 ? 'end' : 'middle';
-  const etiqueta = `<text class="ap-etiqueta" x="${r1(lx)}" y="${r1(Y(max) - 10)}" text-anchor="${anchorMax}">${esc(f(max))}</text>`;
+  let etiqueta = '';
+  if (listas.length === 1) {
+    const iMax = eje.findIndex((p) => p.y === max);
+    const lx = X(iMax);
+    const anchorMax = lx < m.l + 36 ? 'start' : lx > W - m.r - 36 ? 'end' : 'middle';
+    etiqueta = `<text class="ap-etiqueta" x="${r1(lx)}" y="${r1(Y(max) - 10)}" text-anchor="${anchorMax}">${esc(f(max))}</text>`;
+  }
+
+  const leyenda = listas.length > 1 ? `<div class="ap-series-legend">${listas.map((serie, si) => `
+    <span class="ap-series-legend__item" data-serie="${si}"><span class="ap-series-legend__linea"></span>${esc(serie.label)}</span>`).join('')}</div>` : '';
+  const cursores = listas.map((serie, si) => `<circle class="ap-cursor__punto" data-cursor-punto data-serie="${si}" r="4.5"/>`).join('');
 
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">
     ${grilla}${ejeX}
     <line class="ap-eje" x1="${m.l}" x2="${W - m.r}" y1="${r1(Y(0))}" y2="${r1(Y(0))}"/>
-    ${area ? `<path class="ap-area" d="${area}"/>` : ''}
-    <path class="ap-linea" d="${d}"/>
-    ${puntosSVG}${etiqueta}
+    ${marcas}${etiqueta}
     <line class="ap-cursor" data-cursor x1="0" x2="0" y1="${m.t}" y2="${m.t + ph}"/>
-    <circle class="ap-cursor__punto" data-cursor-punto r="4.5"/>
-  </svg>`;
+    ${cursores}
+  </svg>${leyenda}`;
 
   /* El crosshair encuentra el día: se apunta a una fecha, no a una línea de 2 px. */
   const svg = el.querySelector('svg');
   const cursor = svg.querySelector('[data-cursor]');
-  const cp = svg.querySelector('[data-cursor-punto]');
+  const cp = [...svg.querySelectorAll('[data-cursor-punto]')];
   const t = tipDe(el);
-  const ocultar = () => { cursor.style.opacity = 0; cp.style.opacity = 0; t.classList.remove('is-on'); };
+  const ocultar = () => { cursor.style.opacity = 0; cp.forEach((p) => { p.style.opacity = 0; }); t.classList.remove('is-on'); };
   svg.addEventListener('pointermove', (e) => {
     const r = svg.getBoundingClientRect();
     const px = e.clientX - r.left;
     const i = n > 1 ? Math.round(((px - m.l) / pw) * (n - 1)) : 0;
     if (i < 0 || i >= n) return ocultar();
-    const p = puntos[i];
-    const x = X(i); const y = Y(p.y);
+    const valores = listas.map((serie) => serie.puntos[i] || { x: eje[i].x, y: 0 });
+    const x = X(i);
     cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); cursor.style.opacity = 1;
-    cp.setAttribute('cx', x); cp.setAttribute('cy', y); cp.style.opacity = 1;
-    t.innerHTML = tipHTML(f(p.y), fmtDiaSemana(p.x) + (p.extra ? ` · ${p.extra}` : ''));
+    cp.forEach((punto, si) => {
+      punto.setAttribute('cx', x); punto.setAttribute('cy', Y(valores[si].y)); punto.style.opacity = 1;
+    });
+    const y = Math.min(...valores.map((p) => Y(p.y)));
+    if (listas.length === 1) {
+      const p = valores[0];
+      t.innerHTML = tipHTML(f(p.y), fmtDiaSemana(p.x) + (p.extra ? ` · ${p.extra}` : ''));
+    } else {
+      t.innerHTML = `<span class="ap-chart__tip__lab">${esc(fmtDiaSemana(eje[i].x))}</span>${listas.map((serie, si) => `
+        <span class="ap-chart__tip__serie" data-serie="${si}"><span class="ap-chart__tip__punto"></span><span>${esc(serie.label)}</span><b>${esc(f(valores[si].y))}</b></span>`).join('')}`;
+    }
     colocarTip(el, t, x, y);
   });
   svg.addEventListener('pointerleave', ocultar);

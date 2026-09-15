@@ -63,7 +63,7 @@ const DEFAULT_SETTINGS = {
   rangoGraficos: '90d',
   metricaGraficos: 'total',     // total · tomas
   mapaModo: 'calendario',       // calendario · semana
-  sustanciaGraficos: null,      // id, o null = todas
+  sustanciaGraficos: null,      // [id, ...] (máx. 3), id legado, o null = todas
   /** La última sustancia registrada: el diálogo la propone primero. */
   ultimaSustancia: null,
 };

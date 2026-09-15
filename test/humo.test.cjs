@@ -328,6 +328,61 @@ app.whenReady().then(async () => {
   const colorVentana = await js(`(async () => { const { colorToken } = await import('./js/ui.js'); return colorToken('--ox-bg'); })()`);
   ok('el color de la ventana coincide con main.cjs', colorVentana.toLowerCase() === BG_MAIN, `${colorVentana} vs ${BG_MAIN}`);
 
+  console.log('\n15. Comparar hasta tres sustancias en Gráficos');
+  const extras = await js(`(async () => {
+    const T = await import('./js/tienda.js');
+    const ahora = Date.now();
+    const defs = [
+      { nombre: 'Armodafinilo', unidad: 'mg', cantidad: 150, dias: 1 },
+      { nombre: 'Cafeína', unidad: 'mg', cantidad: 80, dias: 2 },
+      { nombre: 'Aceite', unidad: 'ml', cantidad: 2, dias: 3 },
+    ];
+    const out = [];
+    for (const def of defs) {
+      const s = await T.guardarSustancia({ nombre: def.nombre, unidad: def.unidad, dosisHabitual: def.cantidad });
+      await T.guardarDosis({ sustanciaId: s.id, cantidad: def.cantidad, unidad: def.unidad,
+        at: ahora - def.dias * 86400000, hitos: [], notas: '' });
+      out.push(s);
+    }
+    await T.guardarAjustes({ sustanciaGraficos: null, metricaGraficos: 'total', rangoGraficos: '7d' });
+    window.__apex.Router.go('graficos');
+    return out;
+  })()`);
+  await sleep(900);
+  ok('las sustancias auxiliares quedaron disponibles', extras.length === 3, JSON.stringify(extras));
+
+  for (const nombre of ['Modafinilo', 'Armodafinilo', 'Cafeína']) {
+    await tap('#f-sust'); await sleep(250); await menuItem(nombre); await sleep(350);
+  }
+  ok('el ajuste persiste tres ids', (await js(`window.onyx.settings.get().then(a => a.sustanciaGraficos)`)).length === 3);
+  ok('se dibujan tres curvas superpuestas', (await cuenta('#linea .ap-linea')) === 3);
+  ok('la leyenda identifica las tres', (await cuenta('#linea .ap-series-legend__item')) === 3
+    && (await texto('#linea .ap-series-legend')).includes('Modafinilo')
+    && (await texto('#linea .ap-series-legend')).includes('Cafeína'));
+  const trazos = await js(`[...document.querySelectorAll('#linea .ap-linea')].map(p => ({ stroke: getComputedStyle(p).stroke, dash: getComputedStyle(p).strokeDasharray }))`);
+  ok('color y trazo distinguen cada curva', new Set(trazos.map((x) => x.stroke)).size === 3
+    && new Set(trazos.map((x) => x.dash)).size === 3, JSON.stringify(trazos));
+  await tap('#f-sust'); await sleep(300);
+  ok('al llegar a tres, una cuarta queda deshabilitada', await js(`(() => {
+    const b = [...document.querySelectorAll('.ox-menuitem')].find(x => x.textContent.includes('Aceite'));
+    return !!b?.disabled && b.textContent.includes('Máx. 3');
+  })()`));
+  await js(`document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true`); await sleep(250);
+
+  const multiR = await rect('#linea svg');
+  await js(`(() => { const svg = document.querySelector('#linea svg');
+    svg.dispatchEvent(new PointerEvent('pointermove', { clientX: ${multiR.r - 25}, clientY: ${multiR.cy}, bubbles: true })); return true; })()`);
+  await sleep(250);
+  ok('el hover compara las tres en la misma fecha', (await cuenta('#linea .ap-chart__tip__serie')) === 3);
+  await click('#btn-tabla'); await sleep(300);
+  ok('la tabla gemela tiene una columna por curva', (await cuenta('#tabla-wrap thead .ap-serie-cab')) === 3);
+
+  await tap('#f-sust'); await sleep(250); await menuItem('Todas las sustancias');
+  await tap('#f-sust'); await sleep(250); await menuItem('Modafinilo');
+  await tap('#f-sust'); await sleep(250); await menuItem('Aceite');
+  ok('mezclar mg y ml fuerza una comparación por tomas', (await texto('.ap-cardchart .ox-subtitle')) === 'Tomas por día'
+    && !(await existe('#f-metrica')) && (await cuenta('#linea .ap-linea')) === 2);
+
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');
   limpiar();

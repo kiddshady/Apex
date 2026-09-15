@@ -109,9 +109,12 @@ Son SVG dibujados a mano (`renderer/js/graficos.js`), sin librerías: la app
 corre con CSP estricta y sin red, y una librería no se ve de la familia.
 Siguen las reglas del método de dataviz de la casa:
 
-- **Un solo acento por gráfico.** La serie principal es el acento; el contexto
-  (los episodios detrás de la mediana) va en gris. Nunca una paleta por serie:
-  con varias sustancias juntas no hay unidad común, así que se cuentan tomas.
+- **Comparación legible.** Una sola sustancia usa el acento. En Gráficos se
+  pueden elegir hasta tres y superponer sus curvas: cian, violeta y ámbar,
+  también diferenciadas por trazo, con leyenda, hover y tabla compartidos.
+  Si tienen la misma unidad se comparan por dosis o tomas; si se mezclan
+  unidades (por ejemplo mg y ml), Apex cuenta tomas para no fingir una escala
+  común. «Todas las sustancias» conserva la serie agregada de tomas.
 - **Marcas finas**: línea de 2 px, puntos con anillo del color de la
   superficie, área al 10 %, grilla hairline sólida. Una sola etiqueta directa
   (el máximo); el resto lo dice el eje y el hover.

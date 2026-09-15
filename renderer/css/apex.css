@@ -37,7 +37,7 @@
   flex-wrap: wrap;
   margin-bottom: var(--ox-4);
 }
-.ap-filtros .ox-select { width: auto; min-width: 190px; }
+.ap-filtros .ox-select { width: auto; min-width: 190px; max-width: 360px; }
 
 /* ── Accesos rápidos: una toma habitual, a un click de confirmar ────────── */
 .ap-rapidas { display: flex; flex-wrap: wrap; gap: var(--ox-2); }
@@ -198,7 +198,14 @@
 .ap-fase.is-active .ox-icon { color: var(--ox-accent); }
 
 /* ── Gráficos ────────────────────────────────────────────────────────────── */
-.ap-chart { position: relative; width: 100%; min-height: 40px; }
+.ap-chart {
+  --ap-serie-1: var(--ox-accent);
+  --ap-serie-2: oklch(72% .16 302);
+  --ap-serie-3: oklch(78% .15 77);
+  position: relative;
+  width: 100%;
+  min-height: 40px;
+}
 .ap-chart svg { display: block; overflow: visible; max-width: 100%; }
 .ap-chart--heat svg { max-width: none; }
 .ap-chart__vacio {
@@ -216,9 +223,14 @@
 .ap-tick--num { font-variant-numeric: tabular-nums; }
 
 /* La serie: línea de 2 px, puntos de 7 px con anillo de la superficie, área al 10 %. */
-.ap-linea { fill: none; stroke: var(--ox-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.ap-linea { fill: none; stroke: var(--ap-serie, var(--ox-accent)); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .ap-area  { fill: rgb(var(--ox-accent-rgb) / .10); }
-.ap-punto { fill: var(--ox-accent); stroke: var(--ox-s2); stroke-width: 2; }
+.ap-punto { fill: var(--ap-serie, var(--ox-accent)); stroke: var(--ox-s2); stroke-width: 2; }
+.ap-chart [data-serie="0"], .ap-tabla--series [data-serie="0"] { --ap-serie: var(--ap-serie-1, var(--ox-accent)); }
+.ap-chart [data-serie="1"], .ap-tabla--series [data-serie="1"] { --ap-serie: var(--ap-serie-2, oklch(72% .16 302)); }
+.ap-chart [data-serie="2"], .ap-tabla--series [data-serie="2"] { --ap-serie: var(--ap-serie-3, oklch(78% .15 77)); }
+.ap-linea[data-serie="1"] { stroke-dasharray: 8 4; }
+.ap-linea[data-serie="2"] { stroke-dasharray: 2 4; }
 /* El texto viste tokens de texto, nunca el color de la serie. */
 .ap-etiqueta { fill: var(--ox-text-2); font-family: var(--ox-font); font-size: 11px; font-weight: 500; }
 
@@ -230,7 +242,7 @@
   transition: opacity var(--ox-t-1) var(--ox-ease-soft);
 }
 .ap-cursor__punto {
-  fill: var(--ox-accent);
+  fill: var(--ap-serie, var(--ox-accent));
   stroke: var(--ox-text);
   stroke-width: 2;
   opacity: 0;
@@ -273,6 +285,13 @@
 .ap-chart__tip.is-on { opacity: 1; }
 .ap-chart__tip__val { font-size: var(--ox-fs-12); font-weight: var(--ox-w-semi); color: var(--ox-text); font-variant-numeric: tabular-nums; }
 .ap-chart__tip__lab { color: var(--ox-text-3); }
+.ap-chart__tip__serie { display: grid; grid-template-columns: 7px minmax(72px, auto) auto; align-items: center; gap: 6px; }
+.ap-chart__tip__serie b { margin-left: 8px; color: var(--ox-text); font-weight: var(--ox-w-semi); font-variant-numeric: tabular-nums; text-align: right; }
+.ap-chart__tip__punto { width: 6px; height: 6px; border-radius: 50%; background: var(--ap-serie); }
+
+.ap-series-legend { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--ox-4); min-height: 18px; margin-top: var(--ox-1); color: var(--ox-text-3); font-size: var(--ox-fs-11); }
+.ap-series-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.ap-series-legend__linea { width: 17px; height: 2px; border-radius: 2px; background: var(--ap-serie); }
 
 /* Mapa de calor: una sola tonalidad, de menos a más. El cero se hunde casi en
    la superficie; el máximo es el acento pleno. */
@@ -318,6 +337,8 @@
 /* La tabla gemela de un gráfico, que se despliega debajo. */
 .ap-tabla { margin-top: var(--ox-3); max-height: 260px; }
 .ap-tabla .ox-table td { padding: 5px var(--ox-3); }
+.ap-serie-cab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--ox-text-2); }
+.ap-serie-muestra { width: 12px; height: 2px; border-radius: 2px; background: var(--ap-serie); }
 
 /* Las columnas numéricas de las tablas van centradas, no a la derecha como trae
    la plantilla. Es gusto de esta app y no del sistema: acá los valores de una
