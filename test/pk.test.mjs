@@ -110,5 +110,37 @@ es('porDia ordena de hoy hacia atrás', pk.porDia([d3, d1, d2]).map((g) => g.iso
 es('resumen de un día de una sola sustancia', pk.resumenDia([d1, d2]), { tipo: 'suma', total: 300, unidad: 'mg', tomas: 2 });
 es('resumen mezclado cuenta tomas', pk.resumenDia([d1, d3]), { tipo: 'tomas', tomas: 2 });
 
+console.log('\n8. Combinaciones');
+const zolpi = { id: 's-z', nombre: 'Zolpidem', unidad: 'mg', esquema: { modo: 'fijo', tomasDia: 1, min: 20, max: 10 } };
+const combo = { id: 's-c', nombre: 'Zolpidem + Midazolam', componentes: [{ sustanciaId: 's-z', cantidad: 10 }, { sustanciaId: 's-m', cantidad: 7.5 }] };
+const dc = { id: 'd-c', sustanciaId: 's-c', at: t0 + 8 * HORA, cantidad: null, unidad: null,
+  componentes: [{ sustanciaId: 's-z', cantidad: 10, unidad: 'mg' }, { sustanciaId: 's-m', cantidad: 7.5, unidad: 'mg' }],
+  hitos: [hito(8 * 60 + 20, 'onset', 5), hito(8 * 60 + 300, 'fin')] };
+const dz = { id: 'd-z', sustanciaId: 's-z', at: t0 - pk.DIA, cantidad: 10, unidad: 'mg', hitos: [{ ...hito(30, 'onset', 4), at: t0 - pk.DIA + 30 * MIN }] };
+ok('una combinación se reconoce', pk.esCombinacion(combo) && !pk.esCombinacion(zolpi));
+const ap = pk.aportesDe('s-z', [dc, dz, d1]);
+es('los aportes suman la toma propia y la de la combinación', ap.map((d) => `${d.id}:${d.cantidad}`), ['d-c:10', 'd-z:10']);
+es('el aporte de la combinación no trae hitos', ap[0].hitos, []);
+es('y recuerda de qué combinación salió', ap[0].combinacion, 's-c');
+// El perfil del zolpidem solo se calcula con SUS tomas, nunca con las de la mezcla.
+es('el perfil del componente no se contamina', pk.perfil([dz]).fases.onset.mediana, 30);
+es('la combinación tiene su propio perfil', pk.perfil([dc]).fases.onset.mediana, 20);
+es('un día solo de combinaciones cuenta tomas', pk.resumenDia([dc]), { tipo: 'tomas', tomas: 1 });
+
+console.log('\n9. Esquema');
+es('un rango al revés se endereza', pk.normalizarEsquema(zolpi.esquema), { modo: 'fijo', tomasDia: 1, min: 10, max: 20 });
+es('a demanda no lleva tomas por día', pk.normalizarEsquema({ modo: 'demanda', tomasDia: 3, min: 150, max: '' }), { modo: 'demanda', tomasDia: null, min: 150, max: null });
+es('un modo desconocido no es esquema', pk.normalizarEsquema({ modo: 'zzz' }), null);
+es('sin esquema no hay día', pk.esquemaDelDia({ id: 's-1', unidad: 'mg' }, [d1], t0), null);
+const dia = pk.esquemaDelDia(zolpi, [dc, dz], t0 + 9 * HORA);
+es('la toma de la combinación cumple el fijo del componente', [dia.hechas, dia.completo, dia.total], [1, true, 10]);
+const lamo = { id: 's-l', unidad: 'mg', esquema: { modo: 'fijo', tomasDia: 2 } };
+const dl = { id: 'd-l', sustanciaId: 's-l', at: t0 - 5 * HORA, cantidad: 200, unidad: 'mg', hitos: [] };
+const diaL = pk.esquemaDelDia(lamo, [dl, { ...dl, id: 'd-ayer', at: t0 - pk.DIA }], t0);
+es('dos tomas previstas, una hecha hoy', [diaL.hechas, diaL.tomasDia, diaL.completo], [1, 2, false]);
+// Fuera de rango no es error: el esquema describe, no limita.
+const diaZ = pk.esquemaDelDia(zolpi, [{ ...dz, at: t0, cantidad: 30 }], t0);
+es('una toma por encima del rango se cuenta igual', [diaZ.hechas, diaZ.total], [1, 30]);
+
 console.log(`\n═══ ${pass} ok · ${fail} fallas ═══\n`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@ import { paint, head, esc, empty, status, attempt } from '../ui.js';
 import { tick } from '../motion.js';
 import { fmtHM, fmtDosis, fmtDiaLargo, fmtDiaSemana, fmtDiaCorto, fmtOffset, fmtQty, fmtMin, relTime, monogram, plural } from '../format.js';
 import { ordenarHitos, faseInfo, estadoDosis, inicioDia, curvas, MIN } from '../pk.js';
-import { dosis as tomarDosis, sustancia, etiquetaDosis, guardarDosis, setContexto } from '../tienda.js';
+import { dosis as tomarDosis, sustancia, etiquetaDosis, cantidadDosis, nombreSustancia, guardarDosis, setContexto } from '../tienda.js';
 import { viaLabel } from '../vocab.js';
 import { grafCurvas } from '../graficos.js';
 import { dialogoHito, borrarHito, dialogoDosis } from '../dialogos.js';
@@ -84,7 +84,9 @@ export function vistaDosis(id) {
         <div class="ox-inspector__body ox-scroll">
           <div class="ox-kv" style="margin-bottom:18px">
             <span class="ox-kv__k">Estado</span><span class="ox-kv__v">${status(estado)}</span>
-            <span class="ox-kv__k">Cantidad</span><span class="ox-kv__v ox-num">${esc(fmtDosis(d.cantidad, d.unidad))}</span>
+            ${d.componentes?.length
+    ? d.componentes.map((c) => `<span class="ox-kv__k ox-truncate">${esc(nombreSustancia(c.sustanciaId))}</span><span class="ox-kv__v ox-num">${esc(fmtDosis(c.cantidad, c.unidad))}</span>`).join('')
+    : `<span class="ox-kv__k">Cantidad</span><span class="ox-kv__v ox-num">${esc(fmtDosis(d.cantidad, d.unidad))}</span>`}
             <span class="ox-kv__k">Vía</span><span class="ox-kv__v">${esc(d.via ? viaLabel(d.via) : '—')}</span>
             <span class="ox-kv__k">Fecha</span><span class="ox-kv__v">${esc(fmtDiaSemana(d.at))}</span>
             <span class="ox-kv__k">Hora</span><span class="ox-kv__v ox-num">${esc(fmtHM(d.at))}</span>
@@ -148,7 +150,7 @@ function tomaHTML(d) {
       <div class="ap-hito__head">
         <span class="ap-hito__hora">${esc(fmtHM(d.at))}</span>
         <span class="ap-hito__offset">0m</span>
-        <span class="ap-hito__titulo">Toma · ${esc(fmtDosis(d.cantidad, d.unidad))}${d.via ? ` · ${esc(viaLabel(d.via))}` : ''}</span>
+        <span class="ap-hito__titulo">Toma · ${esc(cantidadDosis(d))}${d.via ? ` · ${esc(viaLabel(d.via))}` : ''}</span>
       </div>
       ${d.notas ? `<div class="ap-hito__notas">${esc(d.notas)}</div>` : ''}
     </div></div>`;

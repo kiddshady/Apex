@@ -7,7 +7,7 @@ import Router from '../router.js';
 import { paint, head, esc } from '../ui.js';
 import { bindSwitcher, toggleReveal } from '../motion.js';
 import { fmtDosis, fmtQty, fmtDiaSemana, plural } from '../format.js';
-import { RANGOS, rango, serieDiaria, calendario, semanaHora, enRango } from '../pk.js';
+import { RANGOS, rango, serieDiaria, calendario, semanaHora, enRango, aportesDe } from '../pk.js';
 import { S, sustancia, guardarAjustes, setContexto } from '../tienda.js';
 import { selectHTML } from '../dialogos.js';
 import { Menu } from '../overlays.js';
@@ -33,20 +33,23 @@ export function vistaGraficos() {
   const a = S.ajustes;
   const sustIds = seleccionGuardada(a.sustanciaGraficos);
   const seleccion = sustIds.map((id) => sustancia(id)).filter(Boolean);
-  const unidades = new Set(seleccion.map((x) => x.unidad).filter(Boolean));
-  const unidadComun = seleccion.length > 0 && unidades.size === 1;
+  const unidades = new Set(seleccion.map((x) => x.unidad));
+  // Una combinación no tiene unidad (null): con ella en la selección, se cuentan tomas.
+  const unidadComun = seleccion.length > 0 && unidades.size === 1 && !!seleccion[0].unidad;
   /* Con todas las sustancias juntas no hay una unidad común: sumar mg de una
      cosa con ml de otra no significa nada, así que la métrica es «tomas».
      Una selección múltiple sí puede usar dosis cuando todas comparten unidad. */
   const metrica = unidadComun ? (a.metricaGraficos || 'total') : 'tomas';
   const unidad = unidadComun && metrica === 'total' ? seleccion[0].unidad : '';
   const r = rango(a.rangoGraficos || '90d', S.dosis);
-  const base = S.dosis.filter((d) => !sustIds.length || sustIds.includes(d.sustanciaId));
+  /* Lo que se tomó de una sustancia incluye lo que entró dentro de una
+     combinación: 10 mg de zolpidem son 10 mg aunque hayan venido con otra cosa. */
+  const base = sustIds.length ? sustIds.flatMap((id) => aportesDe(id, S.dosis)) : S.dosis;
   const serie = serieDiaria(base, { ...r, metrica });
   const series = seleccion.length > 1 ? seleccion.map((item) => ({
     id: item.id,
     label: item.nombre,
-    puntos: serieDiaria(S.dosis.filter((d) => d.sustanciaId === item.id), { ...r, metrica })
+    puntos: serieDiaria(aportesDe(item.id, S.dosis), { ...r, metrica })
       .map((p) => ({ x: p.dia, y: p.valor, extra: p.tomas ? plural(p.tomas, 'toma') : '' })),
   })) : null;
   const cal = calendario(serie);

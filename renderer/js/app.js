@@ -14,10 +14,9 @@ import Palette from './palette.js';
 import Router from './router.js';
 import { initClickFlash, initScrollFades, raf2 } from './motion.js';
 import { paint, empty, colorToken, copy, setStateLabels } from './ui.js';
-import { fmtDosis } from './format.js';
 import { designHTML, wireDesign } from './design-view.js';
-import { S, api, cargarTodo, pintarChrome, activas, dosis as tomarDosis, sustancia, setContexto } from './tienda.js';
-import { dialogoDosis, dialogoSustancia, dialogoHito, menuDosis, menuSustancia, confirmarBorrarDosis } from './dialogos.js';
+import { S, api, cargarTodo, pintarChrome, activas, dosis as tomarDosis, sustancia, setContexto, habitualSustancia } from './tienda.js';
+import { dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, menuDosis, menuSustancia, confirmarBorrarDosis } from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
 
 import { vistaInicio } from './vistas/inicio.js';
@@ -69,6 +68,11 @@ async function registrar(sustanciaId = null) {
 
 async function nuevaSustancia() {
   const s = await dialogoSustancia();
+  if (s) Router.go('sustancia', s.id) || Router.refresh();
+}
+
+async function nuevaCombinacion() {
+  const s = await dialogoCombinacion();
   if (s) Router.go('sustancia', s.id) || Router.refresh();
 }
 
@@ -135,6 +139,7 @@ function cablearShell() {
       const a = act.dataset.action;
       if (a === 'registrar') registrar();
       else if (a === 'nueva-sustancia') nuevaSustancia();
+      else if (a === 'nueva-combinacion') nuevaCombinacion();
       else if (a === 'eliminar-dosis') {
         confirmarBorrarDosis(act.dataset.arg).then((ok) => {
           if (!ok) return;
@@ -169,12 +174,13 @@ function registrarComandos() {
   Palette.clear();
   Palette.register([
     { id: 'registrar', group: 'Registrar', icon: 'plus', label: 'Registrar dosis', hint: 'Ctrl N', run: () => registrar() },
-    ...activas().filter((s) => Number(s.dosisHabitual) > 0).map((s) => ({
-      id: `rapida-${s.id}`, group: 'Registrar', icon: 'gota',
-      label: `${s.nombre} ${fmtDosis(s.dosisHabitual, s.unidad)}`, hint: 'habitual',
+    ...activas().filter((s) => habitualSustancia(s)).map((s) => ({
+      id: `rapida-${s.id}`, group: 'Registrar', icon: s.componentes?.length ? 'combinacion' : 'gota',
+      label: `${s.nombre} ${habitualSustancia(s)}`, hint: 'habitual',
       run: () => registrar(s.id),
     })),
     { id: 'nueva-sustancia', group: 'Crear', icon: 'pill', label: 'Nueva sustancia', run: () => nuevaSustancia() },
+    { id: 'nueva-combinacion', group: 'Crear', icon: 'combinacion', label: 'Nueva combinación', run: () => nuevaCombinacion() },
     { id: 'nav-inicio', group: 'Ir a', icon: 'home', label: 'Hoy', run: () => Router.go('inicio') },
     { id: 'nav-registro', group: 'Ir a', icon: 'list', label: 'Registro', run: () => Router.go('registro') },
     { id: 'nav-sustancias', group: 'Ir a', icon: 'pill', label: 'Sustancias', run: () => Router.go('sustancias') },

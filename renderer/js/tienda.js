@@ -12,9 +12,9 @@
    espejo y el disco nunca se desencuentran.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { relTime, fmtDosis } from './format.js';
+import { relTime, fmtDosis, fmtQty } from './format.js';
 import { esc, path as rutaHTML } from './ui.js';
-import { estadoDosis } from './pk.js';
+import { estadoDosis, esCombinacion, normalizarEsquema } from './pk.js';
 
 export const api = window.onyx;
 export const apex = window.apex;
@@ -54,9 +54,41 @@ export function nombreSustancia(id) {
   return sustancia(id)?.nombre || 'Sustancia eliminada';
 }
 
-/** «Modafinilo 200 mg» */
+/** La cantidad de una toma: «200 mg», o en una combinación «10 mg + 7,5 mg»
+    (en el orden de los componentes, que es el del nombre). */
+export function cantidadDosis(d) {
+  if (d.componentes?.length) return d.componentes.map((c) => fmtDosis(c.cantidad, c.unidad)).join(' + ');
+  return fmtDosis(d.cantidad, d.unidad);
+}
+
+/** La dosis habitual de una sustancia en texto, o '' si no tiene. */
+export function habitualSustancia(s) {
+  if (esCombinacion(s)) {
+    return s.componentes.map((c) => fmtDosis(c.cantidad, sustancia(c.sustanciaId)?.unidad || '')).join(' + ');
+  }
+  return Number(s?.dosisHabitual) > 0 ? fmtDosis(s.dosisHabitual, s.unidad) : '';
+}
+
+/** «Fijo · 2 por día · 150–300 mg por toma» · «A demanda · desde 200 mg» */
+export function textoEsquema(s) {
+  const e = normalizarEsquema(s?.esquema);
+  if (!e) return '';
+  const u = s.unidad || '';
+  const rango = e.min != null && e.max != null
+    ? (e.min === e.max ? fmtDosis(e.min, u) : `${fmtQty(e.min)}–${fmtDosis(e.max, u)}`)
+    : e.min != null ? `desde ${fmtDosis(e.min, u)}` : e.max != null ? `hasta ${fmtDosis(e.max, u)}` : '';
+  return [
+    e.modo === 'fijo' ? `Fijo · ${e.tomasDia === 1 ? '1 por día' : `${e.tomasDia} por día`}` : 'A demanda',
+    rango ? `${rango} por toma` : null,
+  ].filter(Boolean).join(' · ');
+}
+
+/** Las combinaciones que llevan a esta sustancia adentro. */
+export const combinacionesCon = (id) => S.sustancias.filter((s) => esCombinacion(s) && s.componentes.some((c) => c.sustanciaId === id));
+
+/** «Modafinilo 200 mg» · «Zolpidem + Midazolam 10 mg + 7,5 mg» */
 export function etiquetaDosis(d) {
-  return `${nombreSustancia(d.sustanciaId)} ${fmtDosis(d.cantidad, d.unidad)}`;
+  return `${nombreSustancia(d.sustanciaId)} ${cantidadDosis(d)}`;
 }
 
 /** Los episodios todavía abiertos (sin «fin», en las últimas 24 h). */

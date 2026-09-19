@@ -5,7 +5,7 @@ import { Icons } from '../icons.js';
 import { esc, mark } from '../ui.js';
 import { fmtHM, fmtDosis, fmtDiaSemana, fmtDiaLargo, fmtOffset, plural } from '../format.js';
 import { estadoDosis, ordenarHitos, faseInfo, inicioDia, sumarDias } from '../pk.js';
-import { nombreSustancia } from '../tienda.js';
+import { nombreSustancia, cantidadDosis } from '../tienda.js';
 import { viaLabel } from '../vocab.js';
 
 /**
@@ -32,7 +32,7 @@ export function filaDosis(d, { conFecha = false, conSustancia = true } = {}) {
       ${mark(estadoDosis(d))}
       <span class="ap-toma__hora">${esc(fmtHM(d.at))}</span>
       <div class="ox-listitem__main">
-        <span class="ox-listitem__title">${conSustancia ? `${esc(nombreSustancia(d.sustanciaId))} ` : ''}<span class="ap-toma__cant">${esc(fmtDosis(d.cantidad, d.unidad))}</span></span>
+        <span class="ox-listitem__title">${conSustancia ? `${esc(nombreSustancia(d.sustanciaId))} ` : ''}<span class="ap-toma__cant">${esc(cantidadDosis(d))}</span></span>
         <span class="ox-listitem__sub">${esc(partes.join(' · '))}</span>
       </div>
       <div class="ox-rowactions">

@@ -60,6 +60,15 @@ Icons.add({
   /* Vía de administración: una flecha que entra. */
   via: '<path d="M2.4 8h7.2M6.8 5.2 9.6 8l-2.8 2.8"/><path d="M11.4 3.2h.8A1.6 1.6 0 0 1 13.8 4.8v6.4a1.6 1.6 0 0 1-1.6 1.6h-.8"/>',
 
+  /* Dos cápsulas corridas en diagonal: una combinación de sustancias. Las dos
+     derechas, por lo mismo que `pill`. */
+  combinacion: '<rect x="1.9" y="2.4" width="8.6" height="4.4" rx="2.2"/><path d="M6.2 2.4v4.4"/>'
+             + '<rect x="5.5" y="9.2" width="8.6" height="4.4" rx="2.2"/><path d="M9.8 9.2v4.4"/>',
+
+  /* Lista con dos de tres puntos llenos: el esquema del día y cuánto va. */
+  esquema: '<circle cx="3.4" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="3.4" cy="8" r="1.4" fill="currentColor" stroke="none"/>'
+         + '<circle cx="3.4" cy="12" r="1.3"/><path d="M6.6 4h7.2M6.6 8h7.2M6.6 12h7.2"/>',
+
   /* Caja archivada: la sustancia que ya no se usa pero cuyas tomas quedan. */
   archivar: '<rect x="1.9" y="2.4" width="12.2" height="3.2" rx="1.1"/>'
           + '<path d="M3.2 5.6v6.5a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.6"/>'

@@ -41,7 +41,14 @@ async function sembrar() {
   const S1 = { id: 's-0001', nombre: 'Modafinilo', unidad: 'mg', dosisHabitual: 200, via: 'oral', vidaMedia: 12, notas: 'Para los días largos. Nunca después de las 11.', createdAt: ahora - 95 * DIA, updatedAt: ahora - 95 * DIA };
   const S2 = { id: 's-0002', nombre: 'Metilfenidato', unidad: 'mg', dosisHabitual: 10, via: 'oral', vidaMedia: 3, notas: '', createdAt: ahora - 80 * DIA, updatedAt: ahora - 80 * DIA };
   const S3 = { id: 's-0003', nombre: 'Melatonina', unidad: 'mg', dosisHabitual: 3, via: 'sublingual', vidaMedia: null, notas: '', createdAt: ahora - 60 * DIA, updatedAt: ahora - 60 * DIA };
-  for (const s of [S1, S2, S3]) await sust.save(s);
+  /* El esquema de base y una combinación, para ver Hoy y el perfil de una mezcla. */
+  S1.esquema = { modo: 'demanda', tomasDia: null, min: 200, max: 400 };
+  const S4 = { id: 's-0004', nombre: 'Lamotrigina', unidad: 'mg', dosisHabitual: 200, via: 'oral', vidaMedia: 29, notas: '', esquema: { modo: 'fijo', tomasDia: 2, min: null, max: null }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
+  const S5 = { id: 's-0005', nombre: 'Zolpidem', unidad: 'mg', dosisHabitual: 10, via: 'oral', vidaMedia: 2.5, notas: '', esquema: { modo: 'fijo', tomasDia: 1, min: 10, max: 20 }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
+  const S6 = { id: 's-0006', nombre: 'Midazolam', unidad: 'mg', dosisHabitual: 7.5, via: 'oral', vidaMedia: 2, notas: '', createdAt: ahora - 40 * DIA, updatedAt: ahora - 40 * DIA };
+  const S7 = { id: 's-0007', nombre: 'Zolpidem + Midazolam', unidad: null, dosisHabitual: null, via: 'oral', vidaMedia: null, notas: '',
+    componentes: [{ sustanciaId: 's-0005', cantidad: 10 }, { sustanciaId: 's-0006', cantidad: 7.5 }], createdAt: ahora - 30 * DIA, updatedAt: ahora - 30 * DIA };
+  for (const s of [S1, S2, S3, S4, S5, S6, S7]) await sust.save(s);
 
   let n = 0;
   const guardar = (d) => dosis.save({ ...d, id: `d-${p4(++n)}`, createdAt: d.at, updatedAt: d.at });
@@ -78,6 +85,22 @@ async function sembrar() {
       await guardar({ sustanciaId: 's-0003', at, cantidad: 3, unidad: 'mg', via: 'sublingual', notas: '', hitos: [] });
     }
   }
+
+  /* Una combinación de noche, un día de cada tres del último mes. */
+  for (let k = 28; k >= 1; k -= 3) {
+    const at = hoy0 - k * DIA + 23 * HORA + entre(0, 40) * MIN;
+    const on = entre(10, 25);
+    await guardar({
+      sustanciaId: 's-0007', at, cantidad: null, unidad: null, via: 'oral', notas: '',
+      componentes: [{ sustanciaId: 's-0005', cantidad: rnd() < .5 ? 10 : 20, unidad: 'mg' }, { sustanciaId: 's-0006', cantidad: 7.5, unidad: 'mg' }],
+      hitos: [
+        { id: `h${n}a`, at: at + on * MIN, fase: 'onset', intensidad: entre(4, 6), notas: '' },
+        { id: `h${n}b`, at: at + (on + entre(20, 40)) * MIN, fase: 'pico', intensidad: entre(8, 10), notas: '' },
+        { id: `h${n}d`, at: at + (on + entre(240, 360)) * MIN, fase: 'fin', intensidad: null, notas: '' },
+      ],
+    });
+  }
+  await guardar({ sustanciaId: 's-0004', at: Math.max(hoy0 + 5 * MIN, ahora - 2 * HORA), cantidad: 200, unidad: 'mg', via: 'oral', notas: '', hitos: [] });
 
   /* Hoy: un episodio en curso, con onset y pico pero sin fin. */
   const at = ahora - 3 * HORA - 12 * MIN;
@@ -152,6 +175,25 @@ app.whenReady().then(async () => {
   await sleep(400);
   await ir('ajustes');
   await foto('11-ajustes');
+  await ir('sustancia', 's-0007');
+  await foto('12-combinacion');
+  await js(`document.querySelector('.ox-viewhead__actions [data-rapida]').click(); true`);
+  await sleep(700);
+  await foto('13-dialogo-dosis-combinacion');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await ir('sustancia', 's-0005');
+  await js(`document.getElementById('btn-editar').click(); true`);
+  await sleep(700);
+  await foto('14-dialogo-esquema');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await ir('sustancias');
+  await js(`document.querySelector('[data-action="nueva-combinacion"]').click(); true`);
+  await sleep(700);
+  await foto('15-dialogo-combinacion');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
 
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');
   try { fs.rmSync(DATA, { recursive: true, force: true }); } catch { /* nada */ }

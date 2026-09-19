@@ -15,16 +15,20 @@
 import { Icons } from './icons.js';
 import { Toast, Menu, Modal } from './overlays.js';
 import Router from './router.js';
-import { bindStepper } from './motion.js';
+import { bindStepper, bindSwitcher, toggleReveal } from './motion.js';
 import { esc, attempt } from './ui.js';
 import { fmtDosis, fmtHM, fmtOffset, fmtQty, fmtDiaSemana, plural } from './format.js';
 import { campoMomento, cablearMomento } from './campo-fecha.js';
-import { FASES, faseInfo, ordenarHitos } from './pk.js';
+import {
+  FASES, faseInfo, ordenarHitos, MODOS_ESQUEMA, MAX_COMPONENTES,
+  esCombinacion, normalizarEsquema, esquemaDelDia,
+} from './pk.js';
 import { UNIDADES, VIAS, pasoPara } from './vocab.js';
 import {
-  S, sustancia, dosis as tomarDosis, dosisDe, activas, etiquetaDosis,
+  S, sustancia, dosis as tomarDosis, dosisDe, activas, etiquetaDosis, combinacionesCon, textoEsquema,
   guardarSustancia, guardarDosis, borrarDosis, borrarSustancia, guardarAjustes,
 } from './tienda.js';
+import { segmentedHTML } from './vistas/comunes.js';
 
 /* ── Piezas compartidas ──────────────────────────────────────────────────── */
 
@@ -97,11 +101,16 @@ const numero = (v) => {
 
 /* ══ Sustancia ═══════════════════════════════════════════════════════════════ */
 
+const MODOS = [{ id: 'ninguno', label: 'Sin esquema' }, ...MODOS_ESQUEMA];
+
 export async function dialogoSustancia(existente = null) {
+  if (esCombinacion(existente)) return dialogoCombinacion(existente);
   const body = document.createElement('div');
   body.className = 'ox-col';
   body.style.gap = '16px';
   const unidad0 = existente?.unidad || S.ajustes.unidadDefault || UNIDADES[0];
+  const esq0 = normalizarEsquema(existente?.esquema);
+  const modo0 = esq0?.modo || 'ninguno';
   body.innerHTML = `
     <div class="ox-field">
       <label class="ox-field__label" for="f-nombre">Nombre</label>
@@ -129,6 +138,28 @@ export async function dialogoSustancia(existente = null) {
       </div>
     </div>
     <div class="ox-field">
+      <label class="ox-field__label">Esquema</label>
+      ${segmentedHTML('f-esquema', MODOS, modo0)}
+    </div>
+    <div class="ox-reveal${esq0 ? ' is-open' : ''}" id="f-esq-wrap"><div>
+      <div class="ox-row" style="gap:12px;align-items:flex-start;padding-bottom:2px">
+        <div class="ox-field ap-apagable${modo0 === 'demanda' ? ' is-off' : ''}" id="f-tomas-campo" style="width:150px">
+          <label class="ox-field__label" for="f-tomas">Tomas por día</label>
+          ${stepperHTML({ id: 'f-tomas', valor: esq0?.tomasDia ?? 1, min: 1, step: 1, placeholder: '1' })}
+        </div>
+        <div class="ox-field ox-grow">
+          <label class="ox-field__label" for="f-min">Rango por toma</label>
+          <div class="ox-row" style="gap:8px">
+            <input class="ox-input ox-input--mono" type="number" id="f-min" min="0" placeholder="mín." value="${esc(esq0?.min ?? '')}">
+            <span class="ox-meta">a</span>
+            <input class="ox-input ox-input--mono" type="number" id="f-max" min="0" placeholder="máx." value="${esc(esq0?.max ?? '')}">
+            <span class="ox-label ox-mono" id="f-esq-unidad" style="min-width:40px">${esc(unidad0)}</span>
+          </div>
+          <span class="ox-field__hint">Opcional y de referencia: una toma fuera del rango se registra igual.</span>
+        </div>
+      </div>
+    </div></div>
+    <div class="ox-field">
       <label class="ox-field__label" for="f-notas">Notas</label>
       <textarea class="ox-textarea" id="f-notas" rows="3" placeholder="Para qué la tomás, interacciones, lo que quieras recordar…">${esc(existente?.notas || '')}</textarea>
     </div>`;
@@ -137,7 +168,7 @@ export async function dialogoSustancia(existente = null) {
     title: existente ? 'Editar sustancia' : 'Nueva sustancia',
     sub: existente ? '' : 'Lo que se toma: cada una tiene su unidad, su dosis habitual y su perfil.',
     body,
-    width: 520,
+    width: 560,
     actions: [
       { label: 'Cancelar', value: null },
       { label: existente ? 'Guardar' : 'Crear', value: true, variant: 'primary' },
@@ -146,13 +177,29 @@ export async function dialogoSustancia(existente = null) {
   const primario = primarioDe();
   const nombre = body.querySelector('#f-nombre');
   const habitual = body.querySelector('#f-habitual');
-  const selU = bindSelect(body.querySelector('#f-unidad'), UNIDADES.map((u) => ({ value: u, label: u })), { valor: unidad0 });
+  const esqUnidad = body.querySelector('#f-esq-unidad');
+  const selU = bindSelect(body.querySelector('#f-unidad'), UNIDADES.map((u) => ({ value: u, label: u })), {
+    valor: unidad0,
+    onChange: (u) => { esqUnidad.textContent = u; },
+  });
   const selV = bindSelect(body.querySelector('#f-via'),
     [{ value: null, label: 'Sin especificar' }, { sep: true }, ...VIAS.map((v) => ({ value: v.id, label: v.label }))],
     { valor: existente?.via || null });
-  bindStepper(body.querySelector('.ox-stepper'));
+  body.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st));
   // El paso acompaña la magnitud: escribir 200 pasa las flechas a 25.
   habitual.addEventListener('change', () => { habitual.step = pasoPara(habitual.value); });
+
+  /* El esquema: «Sin esquema» pliega los campos; «A demanda» apaga las tomas
+     por día (no hay un número fijo) pero deja el rango. */
+  let modo = modo0;
+  const tomasCampo = body.querySelector('#f-tomas-campo');
+  bindSwitcher(body.querySelector('#f-esquema'), (v) => {
+    modo = v;
+    toggleReveal(body.querySelector('#f-esq-wrap'), v !== 'ninguno');
+    tomasCampo.classList.toggle('is-off', v === 'demanda');
+    body.querySelector('#f-tomas').disabled = v === 'demanda';
+  });
+  body.querySelector('#f-tomas').disabled = modo0 === 'demanda';
 
   const validar = () => { if (primario) primario.disabled = !nombre.value.trim(); };
   nombre.addEventListener('input', validar);
@@ -170,6 +217,12 @@ export async function dialogoSustancia(existente = null) {
     dosisHabitual: numero(habitual.value),
     via: selV.valor || null,
     vidaMedia: numero(body.querySelector('#f-vida').value),
+    esquema: modo === 'ninguno' ? null : normalizarEsquema({
+      modo,
+      tomasDia: numero(body.querySelector('#f-tomas').value),
+      min: numero(body.querySelector('#f-min').value),
+      max: numero(body.querySelector('#f-max').value),
+    }),
     notas: body.querySelector('#f-notas').value.trim(),
   };
   const saved = await attempt(() => guardarSustancia(item), { errorTitle: 'No se pudo guardar la sustancia' });
@@ -200,6 +253,7 @@ export async function dialogoDosis({ existente = null, sustanciaId = null } = {}
   const estado = {
     sustanciaId: existente?.sustanciaId || sustanciaId || S.ajustes.ultimaSustancia || lista[0]?.id || null,
     cantidad: existente?.cantidad ?? null,     // null → la habitual de la sustancia
+    componentes: existente?.componentes?.map((c) => c.cantidad) ?? null,   // idem, en una combinación
     via: existente?.via ?? undefined,           // undefined → la habitual de la sustancia
     at: existente?.at ?? Date.now(),
     notas: existente?.notas ?? '',
@@ -208,9 +262,9 @@ export async function dialogoDosis({ existente = null, sustanciaId = null } = {}
 
   for (;;) {
     const res = await formularioDosis(estado, existente);
-    if (res === 'nueva') {
-      const s = await dialogoSustancia();
-      if (s) { estado.sustanciaId = s.id; estado.cantidad = null; estado.via = undefined; }
+    if (res === 'nueva' || res === 'combinacion') {
+      const s = res === 'nueva' ? await dialogoSustancia() : await dialogoCombinacion();
+      if (s) { estado.sustanciaId = s.id; estado.cantidad = null; estado.componentes = null; estado.via = undefined; }
       continue;
     }
     return res;
@@ -224,11 +278,12 @@ async function formularioDosis(estado, existente) {
   const actual = sustancia(estado.sustanciaId);
   if (actual && !opciones.includes(actual)) opciones.unshift(actual);
   const s0 = actual || opciones[0];
+  const simples = opciones.filter((s) => !esCombinacion(s));
+  const combos = opciones.filter(esCombinacion);
 
   const body = document.createElement('div');
   body.className = 'ox-col';
   body.style.gap = '16px';
-  const cant0 = estado.cantidad ?? s0?.dosisHabitual ?? '';
   body.innerHTML = `
     <div class="ox-field">
       <label class="ox-field__label">Sustancia</label>
@@ -236,11 +291,9 @@ async function formularioDosis(estado, existente) {
     </div>
     <div class="ox-row" style="gap:12px;align-items:flex-start">
       <div class="ox-field ox-grow">
-        <label class="ox-field__label" for="f-cant">Cantidad</label>
-        <div class="ox-row" style="gap:10px">
-          ${stepperHTML({ id: 'f-cant', valor: cant0, step: pasoPara(s0?.dosisHabitual), extra: 'style="flex:1 1 auto"' })}
-          <span class="ox-label ox-mono" id="f-unidad" style="min-width:40px">${esc(s0?.unidad || '')}</span>
-        </div>
+        <label class="ox-field__label" id="f-cant-label">Cantidad</label>
+        <div id="f-cant-zona"></div>
+        <span class="ox-field__hint" id="f-esq-hint"></span>
       </div>
       <div class="ox-field" style="width:190px">
         <label class="ox-field__label">Vía</label>
@@ -257,7 +310,7 @@ async function formularioDosis(estado, existente) {
     title: existente ? 'Editar toma' : 'Registrar dosis',
     sub: existente ? '' : 'Después podés sumarle hitos: onset, pico, cuándo mermó.',
     body,
-    width: 540,
+    width: 560,
     actions: [
       { label: 'Cancelar', value: null },
       { label: existente ? 'Guardar' : 'Registrar', value: true, variant: 'primary' },
@@ -265,11 +318,13 @@ async function formularioDosis(estado, existente) {
   });
   const primario = primarioDe();
 
-  const cant = body.querySelector('#f-cant');
-  const unidadEl = body.querySelector('#f-unidad');
+  const zona = body.querySelector('#f-cant-zona');
+  const rotulo = body.querySelector('#f-cant-label');
+  const hint = body.querySelector('#f-esq-hint');
   const notas = body.querySelector('#f-notas');
   let cantTocada = estado.cantidad != null;
   let viaTocada = estado.via !== undefined;
+  let compTocadas = Array.isArray(estado.componentes);
 
   const momento = cablearMomento(body, 'f-momento', () => validar());
 
@@ -277,58 +332,112 @@ async function formularioDosis(estado, existente) {
     [{ value: null, label: 'Sin especificar' }, { sep: true }, ...VIAS.map((v) => ({ value: v.id, label: v.label }))],
     { valor: estado.via !== undefined ? estado.via : (s0?.via || null), onChange: () => { viaTocada = true; } });
 
+  /* La zona de cantidad cambia de forma con la sustancia: un solo campo para
+     una simple, uno por componente para una combinación. Se rehace entera y
+     entra con el mismo deslizamiento de las vistas. */
+  const campos = () => [...zona.querySelectorAll('input[type="number"]')];
+  const pintarCantidad = (s, { entrar = false } = {}) => {
+    if (esCombinacion(s)) {
+      rotulo.textContent = 'Cantidades';
+      const previas = compTocadas && estado.componentes?.length === s.componentes.length ? estado.componentes : null;
+      zona.innerHTML = `<div class="ap-comps">${s.componentes.map((c, i) => {
+        const cs = sustancia(c.sustanciaId);
+        const v = previas ? previas[i] : c.cantidad;
+        return `<div class="ap-comp">
+          <span class="ap-comp__nombre ox-truncate">${esc(cs?.nombre || 'Sustancia eliminada')}</span>
+          ${stepperHTML({ id: `f-comp-${i}`, valor: v ?? '', step: pasoPara(c.cantidad), extra: 'style="width:150px"' })}
+          <span class="ox-label ox-mono ap-comp__u">${esc(cs?.unidad || '')}</span>
+        </div>`;
+      }).join('')}</div>`;
+    } else {
+      rotulo.textContent = 'Cantidad';
+      const v = cantTocada ? estado.cantidad : s?.dosisHabitual;
+      zona.innerHTML = `<div class="ox-row" style="gap:10px">
+        ${stepperHTML({ id: 'f-cant', valor: v ?? '', step: pasoPara(s?.dosisHabitual), extra: 'style="flex:1 1 auto"' })}
+        <span class="ox-label ox-mono" id="f-unidad" style="min-width:40px">${esc(s?.unidad || '')}</span>
+      </div>`;
+    }
+    rotulo.setAttribute('for', campos()[0]?.id || '');
+    zona.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, () => { tocar(s); validar(); }));
+    campos().forEach((c) => c.addEventListener('input', () => { tocar(s); validar(); }));
+    if (entrar) zona.firstElementChild.style.animation = 'ox-glide-in 220ms var(--ox-ease) both';
+    hint.textContent = pistaEsquema(s, !!existente);
+  };
+  const tocar = (s) => {
+    if (esCombinacion(s)) { compTocadas = true; estado.componentes = campos().map((c) => numero(c.value)); }
+    else { cantTocada = true; estado.cantidad = numero(campos()[0]?.value); }
+  };
+
   const recordar = () => {
-    estado.sustanciaId = selS.valor === '__nueva' ? estado.sustanciaId : selS.valor;
-    estado.cantidad = cantTocada ? numero(cant.value) : null;
+    estado.sustanciaId = String(selS.valor).startsWith('__') ? estado.sustanciaId : selS.valor;
     estado.via = viaTocada ? (selV.valor || null) : undefined;
     estado.at = momento.leer() ?? estado.at;
     estado.notas = notas.value;
   };
 
+  const opcion = (s) => ({ value: s.id, label: s.nombre, icon: esCombinacion(s) ? 'combinacion' : 'pill' });
   const selS = bindSelect(body.querySelector('#f-sust'), [
-    ...opciones.map((s) => ({ value: s.id, label: s.nombre, icon: 'pill' })),
+    ...simples.map(opcion),
+    ...(combos.length ? [{ sep: true }, ...combos.map(opcion)] : []),
     { sep: true },
     { value: '__nueva', label: 'Nueva sustancia…', icon: 'plus', siempre: true },
+    { value: '__combinacion', label: 'Nueva combinación…', icon: 'combinacion', siempre: true },
   ], {
     valor: s0?.id || null,
     onChange: (v) => {
-      if (v === '__nueva') { recordar(); Modal.close('nueva'); return; }
+      if (v === '__nueva' || v === '__combinacion') { recordar(); Modal.close(v === '__nueva' ? 'nueva' : 'combinacion'); return; }
       const s = sustancia(v);
       if (!s) return;
-      unidadEl.textContent = s.unidad || '';
-      if (!cantTocada) { cant.value = s.dosisHabitual ?? ''; cant.step = pasoPara(s.dosisHabitual); }
+      // Otra combinación trae sus propias cantidades: las tipeadas eran de la anterior.
+      compTocadas = false;
+      estado.componentes = null;
+      pintarCantidad(s, { entrar: true });
       if (!viaTocada) selV.set(s.via || null);
       validar();
     },
   });
 
-  bindStepper(body.querySelector('.ox-stepper'), () => { cantTocada = true; validar(); });
-  cant.addEventListener('input', () => { cantTocada = true; validar(); });
-
   const validar = () => {
-    const c = numero(cant.value);
-    const ok = !!sustancia(selS.valor) && c != null && c > 0 && momento.leer() != null;
+    const vals = campos().map((c) => numero(c.value));
+    const ok = !!sustancia(selS.valor) && vals.length > 0 && vals.every((c) => c != null && c > 0) && momento.leer() != null;
     if (primario) primario.disabled = !ok;
   };
+  pintarCantidad(s0);
   validar();
   enterEnvia(body);
-  setTimeout(() => { cant.focus(); cant.select(); }, 80);
+  setTimeout(() => { const c = campos()[0]; c?.focus(); c?.select(); }, 80);
 
   const ok = await p;
-  if (ok === 'nueva') return 'nueva';
+  if (ok === 'nueva' || ok === 'combinacion') return ok;
   if (!ok) return null;
   recordar();
 
   const s = sustancia(estado.sustanciaId);
+  const vals = campos().map((c) => numero(c.value));
   const item = {
     ...(existente || {}),
     sustanciaId: s.id,
-    cantidad: numero(cant.value),
-    unidad: s.unidad,
     via: selV.valor || null,
     at: momento.leer(),
     notas: notas.value.trim(),
   };
+  if (esCombinacion(s)) {
+    /* La unidad de cada componente viaja copiada, como en una toma simple. Al
+       editar, la que ya tenía la toma se respeta: cambiarle la unidad a una
+       sustancia no reescribe el historial. */
+    const previa = new Map((existente?.componentes || []).map((c) => [c.sustanciaId, c.unidad]));
+    item.cantidad = null;
+    item.unidad = null;
+    item.componentes = s.componentes.map((c, i) => ({
+      sustanciaId: c.sustanciaId,
+      cantidad: vals[i],
+      unidad: previa.get(c.sustanciaId) || sustancia(c.sustanciaId)?.unidad || UNIDADES[0],
+    }));
+  } else {
+    item.cantidad = vals[0];
+    item.unidad = s.unidad;
+    delete item.componentes;
+  }
   const saved = await attempt(() => guardarDosis(item), { errorTitle: 'No se pudo guardar la toma' });
   if (!saved) return null;
   attempt(() => guardarAjustes({ ultimaSustancia: s.id }), { errorTitle: 'No se pudo recordar la sustancia' });
@@ -337,6 +446,161 @@ async function formularioDosis(estado, existente) {
     text: `${etiquetaDosis(saved)} · ${fmtHM(saved.at)}`,
     icon: 'check',
   });
+  return saved;
+}
+
+/**
+ * La línea de ayuda bajo la cantidad: qué dice el esquema y cómo va hoy. En
+ * una combinación, a qué esquemas les cuenta la toma. Solo informa.
+ */
+function pistaEsquema(s, editando) {
+  if (!s) return '';
+  if (esCombinacion(s)) {
+    const con = s.componentes.map((c) => sustancia(c.sustanciaId)).filter((x) => x && normalizarEsquema(x.esquema));
+    return con.length ? `Cuenta para el esquema de ${con.map((x) => x.nombre).join(' y ')}.` : '';
+  }
+  const dia = esquemaDelDia(s, S.dosis);
+  if (!dia) return '';
+  const partes = [textoEsquema(s)];
+  if (!editando) {
+    partes.push(dia.modo === 'fijo'
+      ? `hoy ${dia.hechas} de ${dia.tomasDia}`
+      : dia.hechas ? `hoy ${fmtDosis(dia.total, s.unidad)} en ${plural(dia.hechas, 'toma')}` : 'hoy ninguna');
+  }
+  return partes.join(' · ');
+}
+
+/* ══ Combinación ═════════════════════════════════════════════════════════════ */
+
+/**
+ * Crea o edita una combinación: de 2 a 3 sustancias con la cantidad de cada
+ * una. El nombre se arma solo con los componentes hasta que se lo toca.
+ */
+export async function dialogoCombinacion(existente = null) {
+  const usadas = new Set((existente?.componentes || []).map((c) => c.sustanciaId));
+  const simples = S.sustancias.filter((s) => !esCombinacion(s) && (!s.archivada || usadas.has(s.id)));
+  if (simples.length < 2) {
+    Toast.show({ title: 'Hacen falta dos sustancias', text: 'Una combinación junta dos o tres sustancias que ya existan.', icon: 'pill' });
+    return null;
+  }
+  const filas = (existente?.componentes || []).map((c) => ({ ...c }));
+  while (filas.length < MAX_COMPONENTES) filas.push({ sustanciaId: null, cantidad: null });
+
+  const nombreAuto = () => filas.map((f) => sustancia(f.sustanciaId)?.nombre).filter(Boolean).join(' + ');
+  let nombreTocado = !!existente && existente.nombre !== nombreAuto();
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  body.innerHTML = `
+    <div class="ox-field">
+      <label class="ox-field__label">Componentes</label>
+      <div class="ap-comps">${filas.map((f, i) => `
+        <div class="ap-comp">
+          <span class="ap-comp__n ox-mono">${i + 1}</span>
+          <div class="ox-grow" style="min-width:0">${selectHTML({ id: `f-cs-${i}`, placeholder: i < 2 ? 'Elegir sustancia' : 'Opcional' })}</div>
+          ${stepperHTML({ id: `f-cc-${i}`, valor: f.cantidad ?? '', step: pasoPara(f.cantidad), extra: 'style="width:140px"' })}
+          <span class="ox-label ox-mono ap-comp__u" id="f-cu-${i}"></span>
+        </div>`).join('')}
+      </div>
+      <span class="ox-field__hint">Hasta ${MAX_COMPONENTES}. Las cantidades son las habituales: al registrar se ajustan.</span>
+    </div>
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-nombre">Nombre</label>
+        <input class="ox-input" id="f-nombre" spellcheck="false" autocomplete="off" value="${esc(existente?.nombre || '')}">
+        <span class="ox-field__hint">Se arma con los componentes si no lo cambiás.</span>
+      </div>
+      <div class="ox-field" style="width:190px">
+        <label class="ox-field__label">Vía habitual</label>
+        ${selectHTML({ id: 'f-via', placeholder: 'Sin especificar' })}
+      </div>
+    </div>
+    <div class="ox-field">
+      <label class="ox-field__label" for="f-notas">Notas</label>
+      <textarea class="ox-textarea" id="f-notas" rows="3" placeholder="Por qué se combinan, en qué orden, qué vigilar…">${esc(existente?.notas || '')}</textarea>
+    </div>`;
+
+  const p = Modal.show({
+    title: existente ? 'Editar combinación' : 'Nueva combinación',
+    sub: existente ? '' : 'Dos o tres sustancias que se toman juntas. Tiene su propio perfil, aparte del de cada una.',
+    body,
+    width: 580,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: existente ? 'Guardar' : 'Crear', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const nombre = body.querySelector('#f-nombre');
+  const cant = (i) => body.querySelector(`#f-cc-${i}`);
+
+  const pintarFila = (i) => {
+    const s = sustancia(filas[i].sustanciaId);
+    body.querySelector(`#f-cu-${i}`).textContent = s?.unidad || '';
+    cant(i).disabled = !s;
+    cant(i).closest('.ap-comp').classList.toggle('is-vacia', !s);
+  };
+  const actualizarNombre = () => {
+    if (!nombreTocado) nombre.value = nombreAuto();
+    nombre.placeholder = nombreAuto() || 'Zolpidem + Midazolam';
+  };
+
+  filas.forEach((f, i) => {
+    const opciones = [
+      ...(i >= 2 ? [{ value: null, label: 'Ninguna' }, { sep: true }] : []),
+      ...simples.map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: 'pill' })),
+    ];
+    bindSelect(body.querySelector(`#f-cs-${i}`), opciones, {
+      valor: f.sustanciaId,
+      onChange: (v) => {
+        f.sustanciaId = v;
+        const s = sustancia(v);
+        // Elegir otra sustancia propone su dosis habitual; «Ninguna» vacía la fila.
+        cant(i).value = s ? (s.dosisHabitual ?? '') : '';
+        cant(i).step = pasoPara(s?.dosisHabitual);
+        pintarFila(i);
+        actualizarNombre();
+        validar();
+      },
+    });
+    bindStepper(cant(i).closest('.ox-stepper'), () => validar());
+    cant(i).addEventListener('input', () => validar());
+    pintarFila(i);
+  });
+  nombre.addEventListener('input', () => { nombreTocado = nombre.value.trim() !== ''; validar(); });
+  const selV = bindSelect(body.querySelector('#f-via'),
+    [{ value: null, label: 'Sin especificar' }, { sep: true }, ...VIAS.map((v) => ({ value: v.id, label: v.label }))],
+    { valor: existente?.via || null });
+
+  const elegidas = () => filas.map((f, i) => ({ ...f, cantidad: numero(cant(i).value) })).filter((f) => sustancia(f.sustanciaId));
+  const validar = () => {
+    const e = elegidas();
+    const distintas = new Set(e.map((f) => f.sustanciaId)).size === e.length;
+    const ok = e.length >= 2 && distintas && e.every((f) => f.cantidad > 0) && (nombre.value.trim() || nombreAuto());
+    if (primario) primario.disabled = !ok;
+  };
+  actualizarNombre();
+  validar();
+  enterEnvia(body);
+
+  const ok = await p;
+  if (!ok) return null;
+
+  const item = {
+    ...(existente || {}),
+    nombre: nombre.value.trim() || nombreAuto(),
+    componentes: elegidas().map((f) => ({ sustanciaId: f.sustanciaId, cantidad: f.cantidad })),
+    unidad: null,
+    dosisHabitual: null,
+    via: selV.valor || null,
+    esquema: null,
+    notas: body.querySelector('#f-notas').value.trim(),
+  };
+  const saved = await attempt(() => guardarSustancia(item), { errorTitle: 'No se pudo guardar la combinación' });
+  if (saved) {
+    Toast.show({ title: existente ? 'Combinación actualizada' : 'Combinación creada', text: saved.nombre, icon: 'combinacion' });
+  }
   return saved;
 }
 
@@ -509,10 +773,15 @@ export async function confirmarBorrarSustancia(id) {
   const s = sustancia(id);
   if (!s) return false;
   const tomas = dosisDe(id).length;
-  if (tomas) {
+  const enCombos = combinacionesCon(id);
+  if (tomas || enCombos.length) {
     const archivar = await Modal.show({
-      title: `«${s.nombre}» tiene ${plural(tomas, 'toma registrada', 'tomas registradas')}`,
-      sub: 'Eliminarla dejaría esas tomas sin nombre. Archivarla la saca del diálogo de registro y de los accesos rápidos, pero el historial y los gráficos quedan.',
+      title: tomas
+        ? `«${s.nombre}» tiene ${plural(tomas, 'toma registrada', 'tomas registradas')}`
+        : `«${s.nombre}» forma parte de ${enCombos.length === 1 ? `«${enCombos[0].nombre}»` : plural(enCombos.length, 'combinación', 'combinaciones')}`,
+      sub: tomas
+        ? 'Eliminarla dejaría esas tomas sin nombre. Archivarla la saca del diálogo de registro y de los accesos rápidos, pero el historial y los gráficos quedan.'
+        : 'Eliminarla dejaría la combinación con un componente sin nombre. Archivarla la saca del diálogo de registro, y la combinación la sigue mostrando.',
       actions: [
         { label: 'Cancelar', value: null },
         { label: s.archivada ? 'Ya está archivada' : 'Archivar', value: true, variant: 'primary', autofocus: true },
@@ -547,6 +816,7 @@ export async function repetirDosis(id) {
   if (!d) return null;
   const saved = await attempt(() => guardarDosis({
     sustanciaId: d.sustanciaId, cantidad: d.cantidad, unidad: d.unidad, via: d.via || null, at: Date.now(), notas: '', hitos: [],
+    ...(d.componentes ? { componentes: d.componentes.map((c) => ({ ...c })) } : {}),
   }), { errorTitle: 'No se pudo repetir la toma' });
   if (saved) {
     Toast.show({ title: 'Toma registrada ahora', text: etiquetaDosis(saved), icon: 'check' });

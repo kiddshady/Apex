@@ -44,6 +44,40 @@
 .ap-rapidas .ox-btn { height: 28px; }
 .ap-rapidas .ox-btn b { font-weight: var(--ox-w-semi); color: var(--ox-text); font-variant-numeric: tabular-nums; }
 
+/* ── El esquema del día ──────────────────────────────────────────────────────
+   Un punto por toma prevista: lleno el que ya se tomó. La fila completa baja
+   un escalón de texto; lo pendiente es lo que tiene que saltar a la vista. */
+.ap-pips { display: flex; align-items: center; gap: 5px; width: 44px; flex: 0 0 auto; flex-wrap: wrap; }
+.ap-pip {
+  width: 8px; height: 8px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--ox-line-3);
+  transition: background-color var(--ox-t-2) var(--ox-ease-soft), box-shadow var(--ox-t-2) var(--ox-ease-soft);
+}
+.ap-pip.is-on { background: var(--ox-accent); box-shadow: inset 0 0 0 1.5px var(--ox-accent); }
+.ap-pips .ox-icon { width: 14px; height: 14px; color: var(--ox-text-3); }
+.ap-esq .ox-listitem__title,
+.ap-esq .ap-esq__estado { transition: color var(--ox-t-2) var(--ox-ease-soft); }
+.ap-esq.is-completo .ox-listitem__title { color: var(--ox-text-2); }
+.ap-esq__estado { font-size: var(--ox-fs-12); color: var(--ox-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-esq.is-completo .ap-esq__estado { color: var(--ox-text-3); }
+
+/* ── Componentes de una combinación: una fila por sustancia ─────────────── */
+.ap-comps { display: flex; flex-direction: column; gap: var(--ox-2); }
+.ap-comp { display: flex; align-items: center; gap: 10px; }
+.ap-comp__n {
+  width: 18px; flex: 0 0 auto; text-align: center;
+  font-size: var(--ox-fs-11); color: var(--ox-text-3);
+}
+.ap-comp__nombre { flex: 1 1 auto; min-width: 0; color: var(--ox-text); }
+.ap-comp__u { min-width: 40px; }
+.ap-comp .ox-stepper { flex: 0 0 auto; transition: opacity var(--ox-t-2) var(--ox-ease-soft); }
+.ap-comp.is-vacia .ox-stepper { opacity: .35; }
+
+/* Un campo que queda visible pero no aplica (las tomas por día de un esquema
+   a demanda): se apaga en vez de desaparecer, para que el layout no salte. */
+.ap-apagable { transition: opacity var(--ox-t-2) var(--ox-ease-soft); }
+.ap-apagable.is-off { opacity: .35; pointer-events: none; }
+
 /* ── Un día del registro ─────────────────────────────────────────────────── */
 .ap-dia { margin-bottom: var(--ox-5); }
 .ap-dia__head {

@@ -18,7 +18,9 @@ let filtroSustancia = null;
 export function vistaRegistro() {
   const r = rango(S.ajustes.rangoRegistro || '30d', S.dosis);
   if (filtroSustancia && !sustancia(filtroSustancia)) filtroSustancia = null;
-  const lista = S.dosis.filter((d) => enRango(d, r) && (!filtroSustancia || d.sustanciaId === filtroSustancia));
+  // Filtrar por una sustancia trae también las combinaciones que la llevan.
+  const coincide = (d) => d.sustanciaId === filtroSustancia || d.componentes?.some((c) => c.sustanciaId === filtroSustancia);
+  const lista = S.dosis.filter((d) => enRango(d, r) && (!filtroSustancia || coincide(d)));
   const dias = porDia(lista);
 
   setContexto('');
@@ -43,7 +45,7 @@ export function vistaRegistro() {
             <span class="ap-dia__fecha">${esc(tituloDia(g.dia))}</span>
             <span class="ap-dia__total">${esc(resumenTexto(resumenDia(g.dosis)))}</span>
           </div>
-          <div class="ox-list">${g.dosis.map((d) => filaDosis(d, { conSustancia: !filtroSustancia })).join('')}</div>
+          <div class="ox-list">${g.dosis.map((d) => filaDosis(d, { conSustancia: !filtroSustancia || d.sustanciaId !== filtroSustancia })).join('')}</div>
         </div>`).join('')
     : `<div class="ox-empty" style="padding:48px 16px">${Icons.svg('inbox')}
         <div class="ox-empty__title">${S.dosis.length ? 'Nada en este rango' : 'Sin tomas todavía'}</div>
@@ -66,7 +68,7 @@ export function vistaRegistro() {
   const opciones = [
     { value: null, label: 'Todas las sustancias' },
     { sep: true },
-    ...S.sustancias.filter((s) => !s.archivada || conTomas.has(s.id)).map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: 'pill' })),
+    ...S.sustancias.filter((s) => !s.archivada || conTomas.has(s.id)).map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: s.componentes?.length ? 'combinacion' : 'pill' })),
   ];
   bindSelect(document.getElementById('f-sust'), opciones, {
     valor: filtroSustancia,

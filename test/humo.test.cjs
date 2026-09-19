@@ -383,6 +383,85 @@ app.whenReady().then(async () => {
   ok('mezclar mg y ml fuerza una comparación por tomas', (await texto('.ap-cardchart .ox-subtitle')) === 'Tomas por día'
     && !(await existe('#f-metrica')) && (await cuenta('#linea .ap-linea')) === 2);
 
+  console.log('\n16. El esquema de una sustancia');
+  await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
+  await sleep(700);
+  await click('#btn-editar');
+  await sleep(600);
+  ok('sin esquema, los campos están plegados', !(await existe('#f-esq-wrap.is-open')));
+  await click('#f-esquema [data-value="demanda"]');
+  await sleep(400);
+  ok('a demanda despliega el rango', await existe('#f-esq-wrap.is-open'));
+  ok('y apaga las tomas por día', await existe('#f-tomas-campo.is-off'));
+  await click('#f-esquema [data-value="fijo"]');
+  await sleep(300);
+  ok('fijo las prende', !(await existe('#f-tomas-campo.is-off')));
+  await escribir('#f-tomas', '2');
+  await escribir('#f-min', '400');
+  await escribir('#f-max', '200');
+  await primario();
+  let modaf = await js(`window.onyx.col('sustancias').get(${JSON.stringify(sust.id)})`);
+  ok('el esquema quedó en disco, con el rango enderezado', JSON.stringify(modaf?.esquema) === JSON.stringify({ modo: 'fijo', tomasDia: 2, min: 200, max: 400 }), JSON.stringify(modaf?.esquema));
+  ok('el perfil lo dice en la cabecera', (await texto('.ox-viewhead__sub'))?.includes('Fijo · 2 por día · 200–400 mg por toma'), await texto('.ox-viewhead__sub'));
+
+  await click('[data-view="inicio"]');
+  await sleep(700);
+  ok('Hoy muestra el esquema', await existe(`.ap-esq[data-sust="${sust.id}"]`));
+  ok('con dos puntos y uno lleno', (await cuenta('.ap-esq .ap-pip')) === 2 && (await cuenta('.ap-esq .ap-pip.is-on')) === 1);
+  ok('y dice 1 de 2', (await texto('.ap-esq .ap-esq__estado')) === '1 de 2');
+  ok('lo del esquema no se repite en los rápidos', !(await js(`[...document.querySelectorAll('.ap-rapidas [data-rapida]')].some(b => b.dataset.rapida === ${JSON.stringify(sust.id)})`)));
+
+  console.log('\n17. Una combinación');
+  await click('[data-view="sustancias"]');
+  await sleep(700);
+  await click('[data-action="nueva-combinacion"]');
+  await sleep(600);
+  ok('el diálogo abre con tres filas', (await cuenta('.ox-modal .ap-comp')) === 3);
+  ok('vacío, el primario está apagado', (await primarioApagado()) === true);
+  await tap('#f-cs-0'); await sleep(300); await menuItem('Modafinilo');
+  await tap('#f-cs-1'); await sleep(300); await menuItem('Modafinilo');
+  ok('la misma sustancia dos veces no vale', (await primarioApagado()) === true);
+  await tap('#f-cs-1'); await sleep(300); await menuItem('Armodafinilo');
+  ok('dos distintas sí', (await primarioApagado()) === false);
+  ok('propone la dosis habitual de cada una', (await js(`[0,1].map(i => document.querySelector('#f-cc-' + i).value).join('|')`)) === '200|150');
+  ok('el nombre se arma solo', (await js(`document.querySelector('#f-nombre').value`)) === 'Modafinilo + Armodafinilo');
+  await primario();
+  const combo = await js(`window.onyx.col('sustancias').list().then(l => l.find(s => s.componentes) || null)`);
+  ok('quedó en disco con sus componentes y sin unidad', combo?.componentes?.length === 2 && combo.unidad === null
+    && combo.componentes[1].cantidad === 150, JSON.stringify(combo));
+  ok('el router abrió su perfil', (await texto('.ox-viewhead__title')) === 'Modafinilo + Armodafinilo');
+  ok('el inspector lista los componentes', (await cuenta('.ox-inspector [data-sust]')) === 2);
+
+  await click('.ox-viewhead__actions [data-rapida]');
+  await sleep(600);
+  ok('registrar pide una cantidad por componente', (await cuenta('.ox-modal .ap-comp')) === 2 && !(await existe('#f-cant')));
+  ok('con las habituales de la combinación', (await js(`document.querySelector('#f-comp-0').value`)) === '200');
+  ok('y avisa a qué esquema cuenta', (await texto('#f-esq-hint')).includes('Cuenta para el esquema de Modafinilo'), await texto('#f-esq-hint'));
+  await escribir('#f-comp-1', '100');
+  await escribir('#f-momento-hora', '1600');
+  await primario();
+  const dCombo = await js(`window.onyx.col('dosis').list().then(l => l.find(d => d.componentes) || null)`);
+  ok('la toma guarda cada componente con su unidad', JSON.stringify(dCombo?.componentes?.map((c) => [c.cantidad, c.unidad])) === '[[200,"mg"],[100,"mg"]]', JSON.stringify(dCombo));
+  ok('y no inventa una cantidad propia', dCombo?.cantidad === null && dCombo.unidad === null);
+  ok('el detalle nombra las dos cantidades', (await texto('.ox-viewhead__title')) === 'Modafinilo + Armodafinilo 200 mg + 100 mg', await texto('.ox-viewhead__title'));
+
+  await click('[data-view="inicio"]');
+  await sleep(700);
+  ok('la toma de la combinación completa el esquema del componente', (await texto('.ap-esq .ap-esq__estado')) === '2 de 2'
+    && await existe('.ap-esq.is-completo'));
+
+  await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
+  await sleep(700);
+  ok('el perfil del componente sigue con su única toma', (await cuenta('.ox-table tbody tr')) === 1);
+  ok('y señala la combinación aparte', (await texto('.ox-inspector'))?.includes('En combinaciones'));
+
+  await tap('[data-view="registro"]');
+  await sleep(700);
+  ok('en el registro, la combinación dice sus dos cantidades', (await js(`[...document.querySelectorAll('.ap-toma__cant')].map(e => e.textContent).includes('200 mg + 100 mg')`)));
+
+  const csv2 = await ipc.armarCSV();
+  ok('el CSV abre la combinación en una fila por componente', csv2.split('\r\n').filter((l) => l.startsWith('"componente"')).length === 2);
+
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');
   limpiar();

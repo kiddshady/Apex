@@ -286,7 +286,8 @@ export function perfil(lista) {
   for (const d of lista) {
     const hs = ordenarHitos(d.hitos || []);
     if (hs.length) conHitos += 1;
-    cantidades.push(Number(d.cantidad));
+    // Una combinación no tiene una cantidad sola: sus tomas no entran acá.
+    if (d.cantidad != null && d.cantidad !== '') cantidades.push(Number(d.cantidad));
     const primero = {};
     let picoI = null;
     for (const h of hs) {
@@ -308,6 +309,82 @@ export function perfil(lista) {
     duracion: stats(duraciones),
     intensidad: stats(picos),
     cantidad: stats(cantidades),
+  };
+}
+
+/* ── Combinaciones ───────────────────────────────────────────────────────────
+   Una combinación es una sustancia más, con `componentes` (de 2 a 3): tiene su
+   propio perfil, sus curvas y sus episodios. Su toma guarda la cantidad de
+   cada componente con la unidad copiada, igual que una toma simple.
+
+   Lo que la combinación NO hace es entrar en el perfil de sus componentes: el
+   pico de Zolpidem + Midazolam no es del zolpidem, y mezclarlo le correría la
+   mediana del onset al zolpidem solo. Donde sí cuenta es en lo que se tomó —
+   el esquema del día y las series de Gráficos—, y para eso está aportesDe. */
+
+export const MAX_COMPONENTES = 3;
+
+export const esCombinacion = (s) => Array.isArray(s?.componentes) && s.componentes.length > 0;
+
+/**
+ * Las tomas de una sustancia más lo que aportó dentro de combinaciones, como
+ * tomas virtuales sin hitos (llevan `combinacion` con el id de la mezcla).
+ */
+export function aportesDe(sustanciaId, dosis) {
+  const out = [];
+  for (const d of dosis) {
+    if (d.sustanciaId === sustanciaId) { out.push(d); continue; }
+    for (const c of d.componentes || []) {
+      if (c.sustanciaId !== sustanciaId) continue;
+      out.push({ id: d.id, sustanciaId, at: d.at, cantidad: c.cantidad, unidad: c.unidad, via: d.via, hitos: [], combinacion: d.sustanciaId });
+    }
+  }
+  return out;
+}
+
+/* ── Esquema ─────────────────────────────────────────────────────────────────
+   La medicación de base: una sustancia puede tener un esquema fijo (N tomas
+   por día) o a demanda, y un rango por toma opcional. El rango es un dato, no
+   un límite: Apex no bloquea ni advierte una toma fuera de él. */
+
+export const MODOS_ESQUEMA = [
+  { id: 'fijo',    label: 'Fijo' },
+  { id: 'demanda', label: 'A demanda' },
+];
+
+/** El esquema limpio, o null si la sustancia no tiene uno válido. */
+export function normalizarEsquema(e) {
+  if (!e || !MODOS_ESQUEMA.some((m) => m.id === e.modo)) return null;
+  const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? null : Number(v));
+  let min = num(e.min); let max = num(e.max);
+  if (min != null && max != null && min > max) [min, max] = [max, min];
+  return {
+    modo: e.modo,
+    tomasDia: e.modo === 'fijo' ? Math.max(1, Math.round(num(e.tomasDia) ?? 1)) : null,
+    min,
+    max,
+  };
+}
+
+/**
+ * Cómo va el esquema de una sustancia en el día de `ahora`: cuántas tomas
+ * hubo (contando las de combinaciones), cuánto suma, y si el fijo se cumplió.
+ * La suma solo cuenta lo que está en la unidad de la sustancia.
+ */
+export function esquemaDelDia(s, dosis, ahora = Date.now()) {
+  const e = normalizarEsquema(s?.esquema);
+  if (!e) return null;
+  const desde = inicioDia(ahora);
+  const hasta = sumarDias(desde, 1);
+  const hoy = aportesDe(s.id, dosis).filter((d) => d.at >= desde && d.at < hasta).sort((a, b) => a.at - b.at);
+  const total = hoy.filter((d) => d.unidad === s.unidad).reduce((n, d) => n + (Number(d.cantidad) || 0), 0);
+  return {
+    ...e,
+    hechas: hoy.length,
+    total,
+    unidad: s.unidad,
+    tomas: hoy,
+    completo: e.modo === 'fijo' ? hoy.length >= e.tomasDia : null,
   };
 }
 
@@ -346,7 +423,8 @@ export function porDia(lista) {
 export function resumenDia(ds) {
   const ids = new Set(ds.map((d) => d.sustanciaId));
   const unidades = new Set(ds.map((d) => d.unidad));
-  if (ds.length && ids.size === 1 && unidades.size === 1) {
+  // Una combinación no tiene unidad propia: sus tomas se cuentan.
+  if (ds.length && ids.size === 1 && unidades.size === 1 && ds[0].unidad) {
     return { tipo: 'suma', total: ds.reduce((s, d) => s + (Number(d.cantidad) || 0), 0), unidad: ds[0].unidad, tomas: ds.length };
   }
   return { tipo: 'tomas', tomas: ds.length };

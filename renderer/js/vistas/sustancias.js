@@ -7,29 +7,49 @@ import Router from '../router.js';
 import { paint, head, esc, empty, attempt } from '../ui.js';
 import { countTo, tick } from '../motion.js';
 import { fmtDosis, fmtQty, fmtMin, fmtHM, fmtDiaSemana, fmtOffset, relTime, monogram, plural } from '../format.js';
-import { perfil, curvas, curvaMediana, totales, ordenarHitos, sumarDias, inicioDia, MIN } from '../pk.js';
-import { S, sustancia, dosisDe, setContexto, guardarSustancia } from '../tienda.js';
+import { perfil, curvas, curvaMediana, totales, ordenarHitos, sumarDias, inicioDia, esCombinacion, MIN } from '../pk.js';
+import {
+  S, sustancia, dosisDe, setContexto, guardarSustancia,
+  cantidadDosis, habitualSustancia, textoEsquema, combinacionesCon,
+} from '../tienda.js';
 import { viaLabel } from '../vocab.js';
 import { grafCurvas } from '../graficos.js';
 import { dialogoSustancia, archivarSustancia } from '../dialogos.js';
 import { kpi } from './comunes.js';
 
-const BTN_NUEVA = `<button class="ox-btn ox-btn--primary ox-flashable" data-action="nueva-sustancia">${Icons.svg('plus')} Nueva sustancia</button>`;
+const BTN_NUEVA = `<button class="ox-btn ox-btn--secondary ox-flashable" data-action="nueva-combinacion">${Icons.svg('combinacion')} Nueva combinación</button>
+  <button class="ox-btn ox-btn--primary ox-flashable" data-action="nueva-sustancia">${Icons.svg('plus')} Nueva sustancia</button>`;
+
+/** El avatar de una sustancia: sus iniciales, o las dos cápsulas si es una combinación. */
+const avatar = (s, extra = '') => (esCombinacion(s)
+  ? `<span class="ox-avatar${extra}">${Icons.svg('combinacion')}</span>`
+  : `<span class="ox-avatar${extra}">${esc(monogram(s.nombre))}</span>`);
 
 /* ══ Lista ═══════════════════════════════════════════════════════════════════ */
 
 export function vistaSustancias() {
-  const activasL = S.sustancias.filter((s) => !s.archivada);
+  const activasL = S.sustancias.filter((s) => !s.archivada && !esCombinacion(s));
+  const combos = S.sustancias.filter((s) => !s.archivada && esCombinacion(s));
   const archivadas = S.sustancias.filter((s) => s.archivada);
 
   setContexto('');
   paint(head({
     title: 'Sustancias',
-    sub: S.sustancias.length ? `${plural(activasL.length, 'activa')}${archivadas.length ? ` · ${plural(archivadas.length, 'archivada')}` : ''}` : 'Lo que tomás, con su unidad y su dosis habitual',
+    sub: S.sustancias.length ? [
+      plural(activasL.length, 'activa'),
+      combos.length ? plural(combos.length, 'combinación', 'combinaciones') : null,
+      archivadas.length ? plural(archivadas.length, 'archivada') : null,
+    ].filter(Boolean).join(' · ') : 'Lo que tomás, con su unidad y su dosis habitual',
     actions: BTN_NUEVA,
   }) + (S.sustancias.length ? `
     <div class="ox-scroll ox-grow">
       <div class="ox-list">${activasL.map(filaSustancia).join('')}</div>
+      ${combos.length ? `
+        <div class="ox-section">
+          <div class="ox-section__head"><span class="ox-section__title">Combinaciones</span>
+            <span class="ox-meta">cada una con su perfil, aparte del de sus componentes</span></div>
+          <div class="ox-list">${combos.map(filaSustancia).join('')}</div>
+        </div>` : ''}
       ${archivadas.length ? `
         <div class="ox-section">
           <div class="ox-section__head"><span class="ox-section__title">Archivadas</span>
@@ -50,21 +70,24 @@ function filaSustancia(s) {
   const ds = dosisDe(s.id);
   const t = totales(ds);
   const hace30 = totales(ds.filter((d) => d.at >= sumarDias(inicioDia(Date.now()), -29)));
+  const combo = esCombinacion(s);
   const detalle = [
-    s.dosisHabitual ? `${fmtDosis(s.dosisHabitual, s.unidad)} habitual` : s.unidad,
+    habitualSustancia(s) ? `${habitualSustancia(s)} habitual` : s.unidad,
     s.via ? viaLabel(s.via) : null,
     s.vidaMedia ? `t½ ${fmtQty(s.vidaMedia)} h` : null,
+    textoEsquema(s) || null,
   ].filter(Boolean).join(' · ');
+  const treinta = combo ? plural(hace30.tomas, 'toma') : fmtDosis(hace30.total, s.unidad);
   return `
     <div class="ox-listitem" role="button" tabindex="0" data-sust="${esc(s.id)}">
-      <span class="ox-avatar">${esc(monogram(s.nombre))}</span>
+      ${avatar(s)}
       <div class="ox-listitem__main">
         <span class="ox-listitem__title">${esc(s.nombre)}${s.archivada ? ` <span class="ox-chip ox-chip--outline">archivada</span>` : ''}</span>
         <span class="ox-listitem__sub">${esc(detalle)}</span>
       </div>
       <div class="ox-listitem__aside ap-sust__stats">
         <span><b>${esc(String(t.tomas))}</b> ${t.tomas === 1 ? 'toma' : 'tomas'}</span>
-        <span>30 d: <b>${esc(hace30.tomas ? fmtDosis(hace30.total, s.unidad) : '—')}</b></span>
+        <span>30 d: <b>${esc(hace30.tomas ? treinta : '—')}</b></span>
         <span>última: <b>${esc(t.ultima ? relTime(t.ultima) : '—')}</b></span>
       </div>
       <div class="ox-rowactions">
@@ -90,12 +113,16 @@ export function vistaSustancia(id) {
   const p = perfil(ds);
   const cs = curvas(ds);
   const med = curvaMediana(cs);
+  const combo = esCombinacion(s);
+  const enCombos = combo ? [] : combinacionesCon(s.id);
+  const habitual = habitualSustancia(s);
 
-  setContexto(`${Icons.svg('pill', 'ox-icon--sm')}<span>${esc(s.nombre)}</span>`);
+  setContexto(`${Icons.svg(combo ? 'combinacion' : 'pill', 'ox-icon--sm')}<span>${esc(s.nombre)}</span>`);
   paint(head({
     title: s.nombre,
     sub: [
-      s.dosisHabitual ? `${fmtDosis(s.dosisHabitual, s.unidad)} habitual` : `en ${s.unidad}`,
+      habitual ? `${habitual} habitual` : `en ${s.unidad}`,
+      textoEsquema(s) || null,
       s.via ? viaLabel(s.via) : null,
       s.vidaMedia ? `vida media ${fmtQty(s.vidaMedia)} h` : null,
       s.archivada ? 'archivada' : null,
@@ -111,7 +138,9 @@ export function vistaSustancia(id) {
         <div class="ox-scroll ox-grow">
           <div class="ap-kpis">
             ${kpi('0', 'Tomas', { id: 'k-tomas' })}
-            ${kpi(hace30.tomas ? fmtQty(hace30.total) : '—', 'Últimos 30 días', { unidad: hace30.tomas ? s.unidad : '', tip: `${plural(hace30.tomas, 'toma')} en los últimos 30 días` })}
+            ${combo
+    ? kpi(String(hace30.tomas), 'Últimos 30 días', { tip: 'Tomas de la combinación en los últimos 30 días' })
+    : kpi(hace30.tomas ? fmtQty(hace30.total) : '—', 'Últimos 30 días', { unidad: hace30.tomas ? s.unidad : '', tip: `${plural(hace30.tomas, 'toma')} en los últimos 30 días` })}
             ${kpi(t.ultima ? relTime(t.ultima) : '—', 'Última toma')}
             ${kpi(String(p.conHitos), 'Episodios con hitos', { tip: 'Tomas que tienen al menos un hito anotado' })}
           </div>
@@ -130,7 +159,12 @@ export function vistaSustancia(id) {
                 ${itemPerfil('faseFin', 'Fin', p.fases.fin)}
                 ${itemPerfil('clock', 'Duración', p.duracion, { nota: 'del onset al fin' })}
                 ${itemPerfil('zap', 'Intensidad máx.', p.intensidad, { formato: (v) => `${fmtQty(v)} / 10` })}
-                ${itemPerfil('gota', 'Dosis', p.cantidad, { formato: (v) => fmtDosis(v, s.unidad) })}
+                ${combo
+    ? `<div class="ap-perfil__item">
+                    <span class="ap-perfil__k">${Icons.svg('combinacion')} Habitual</span>
+                    <span class="ap-perfil__v">${esc(habitual)}</span>
+                    <span class="ap-perfil__r">${esc(plural(s.componentes.length, 'componente'))}</span></div>`
+    : itemPerfil('gota', 'Dosis', p.cantidad, { formato: (v) => fmtDosis(v, s.unidad) })}
               </div>
             </div>
           </div>
@@ -158,7 +192,7 @@ export function vistaSustancia(id) {
 
       <aside class="ox-inspector">
         <div class="ox-inspector__head">
-          <span class="ox-avatar ox-avatar--lg">${esc(monogram(s.nombre))}</span>
+          ${avatar(s, ' ox-avatar--lg')}
           <div class="ox-grow" style="min-width:0">
             <div class="ox-truncate" style="font-weight:var(--ox-w-medium)">${esc(s.nombre)}</div>
             <div class="ox-meta ox-mono">${esc(s.id)}</div>
@@ -166,14 +200,34 @@ export function vistaSustancia(id) {
         </div>
         <div class="ox-inspector__body ox-scroll">
           <div class="ox-kv" style="margin-bottom:18px">
+            ${combo ? `
+            <span class="ox-kv__k">Vía</span><span class="ox-kv__v">${esc(s.via ? viaLabel(s.via) : '—')}</span>` : `
             <span class="ox-kv__k">Unidad</span><span class="ox-kv__v ox-mono">${esc(s.unidad || '—')}</span>
-            <span class="ox-kv__k">Habitual</span><span class="ox-kv__v ox-num">${esc(s.dosisHabitual ? fmtDosis(s.dosisHabitual, s.unidad) : '—')}</span>
+            <span class="ox-kv__k">Habitual</span><span class="ox-kv__v ox-num">${esc(habitual || '—')}</span>
+            <span class="ox-kv__k">Esquema</span><span class="ox-kv__v">${esc(textoEsquema(s) || '—')}</span>
             <span class="ox-kv__k">Vía</span><span class="ox-kv__v">${esc(s.via ? viaLabel(s.via) : '—')}</span>
             <span class="ox-kv__k">Vida media</span><span class="ox-kv__v ox-num">${esc(s.vidaMedia ? `${fmtQty(s.vidaMedia)} h` : '—')}</span>
-            <span class="ox-kv__k">Total</span><span class="ox-kv__v ox-num">${esc(t.tomas ? fmtDosis(t.total, s.unidad) : '—')}</span>
+            <span class="ox-kv__k">Total</span><span class="ox-kv__v ox-num">${esc(t.tomas ? fmtDosis(t.total, s.unidad) : '—')}</span>`}
             <span class="ox-kv__k">Primera</span><span class="ox-kv__v">${esc(t.primera ? fmtDiaSemana(t.primera) : '—')}</span>
             <span class="ox-kv__k">Creada</span><span class="ox-kv__v">${esc(relTime(s.createdAt))}</span>
           </div>
+          ${combo ? `
+          <div class="ox-field" style="margin-bottom:18px">
+            <span class="ox-field__label">Componentes</span>
+            <div class="ox-list">${s.componentes.map((c) => {
+    const cs = sustancia(c.sustanciaId);
+    return `<div class="ox-listitem" role="button" tabindex="0" data-sust="${esc(c.sustanciaId)}">
+                <div class="ox-listitem__main"><span class="ox-listitem__title">${esc(cs?.nombre || 'Sustancia eliminada')}</span></div>
+                <span class="ap-toma__cant">${esc(fmtDosis(c.cantidad, cs?.unidad || ''))}</span></div>`;
+  }).join('')}</div>
+          </div>` : ''}
+          ${enCombos.length ? `
+          <div class="ox-field" style="margin-bottom:18px">
+            <span class="ox-field__label">En combinaciones</span>
+            <div class="ox-list">${enCombos.map((c) => `<div class="ox-listitem" role="button" tabindex="0" data-sust="${esc(c.id)}">
+                <div class="ox-listitem__main"><span class="ox-listitem__title">${esc(c.nombre)}</span>
+                <span class="ox-listitem__sub">${esc(plural(dosisDe(c.id).length, 'toma'))}; no entran en este perfil</span></div></div>`).join('')}</div>
+          </div>` : ''}
           <div class="ox-field">
             <label class="ox-field__label" for="notas">Notas</label>
             <textarea class="ox-textarea ap-notas" id="notas" placeholder="Para qué la tomás, interacciones, lo que quieras recordar… Se guarda al salir del campo.">${esc(s.notas || '')}</textarea>
@@ -230,7 +284,7 @@ function tablaEpisodios(ds) {
     return `<tr class="ox-tr" data-open="${esc(d.id)}" role="button" tabindex="0">
       <td>${esc(fmtDiaSemana(d.at))}</td>
       <td class="ox-td--num ox-mono">${esc(fmtHM(d.at))}</td>
-      <td class="ox-td--num">${esc(fmtDosis(d.cantidad, d.unidad))}</td>
+      <td class="ox-td--num">${esc(cantidadDosis(d))}</td>
       <td>${esc(d.via ? viaLabel(d.via) : '—')}</td>
       <td class="ox-td--num">${hs.length || '—'}</td>
       <td class="ox-td--num">${esc(on ? fmtOffset(on.at - d.at) : '—')}</td>

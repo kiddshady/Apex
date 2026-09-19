@@ -47,6 +47,41 @@ Dos colecciones en `data/` (una carpeta por colección, un archivo JSON por
 La unidad viaja copiada en la toma a propósito: cambiarle la unidad a una
 sustancia no reescribe el historial.
 
+### El esquema
+
+Una sustancia puede llevar su **esquema**: fijo (N tomas por día) o a demanda,
+con un rango por toma opcional.
+
+```json
+"esquema": { "modo": "fijo", "tomasDia": 2, "min": null, "max": null }
+"esquema": { "modo": "demanda", "tomasDia": null, "min": 150, "max": 300 }
+```
+
+Hoy lo muestra arriba de todo: un punto por toma prevista, lleno el que ya se
+tomó, y en las de a demanda cuánto va del día. El rango es un dato, no un
+límite: una toma fuera de él se registra igual y nada la marca.
+
+### Las combinaciones
+
+Una **combinación** es una sustancia más con `componentes` (de 2 a 3) en lugar
+de unidad y dosis habitual. Su toma guarda la cantidad de cada componente, con
+la unidad copiada:
+
+```json
+{ "id": "s-0007", "nombre": "Zolpidem + Midazolam", "unidad": null,
+  "componentes": [{ "sustanciaId": "s-0005", "cantidad": 10 }, { "sustanciaId": "s-0006", "cantidad": 7.5 }] }
+
+{ "id": "d-0090", "sustanciaId": "s-0007", "cantidad": null, "unidad": null,
+  "componentes": [{ "sustanciaId": "s-0005", "cantidad": 10, "unidad": "mg" },
+                  { "sustanciaId": "s-0006", "cantidad": 7.5, "unidad": "mg" }], "hitos": [ … ] }
+```
+
+Tiene su propio perfil y sus curvas, y **no entra en el perfil de sus
+componentes**: el pico de la mezcla no es el del zolpidem, y mezclarlo le
+correría la mediana al zolpidem solo. Sí cuenta en lo que se tomó: el esquema
+del día del componente, sus series en Gráficos (`aportesDe` en `pk.js`) y el
+filtro del Registro. En el CSV sale una fila `componente` por cada uno.
+
 ### Los hitos
 
 Son los checkpoints del episodio, el «14:00 tomo → 15:00 onset → 17:00 va

@@ -74,7 +74,12 @@ async function armarCSV() {
   const ordenadas = [...dosis].sort((a, b) => (a.at || 0) - (b.at || 0));
   for (const d of ordenadas) {
     filas.push(['dosis', d.id, fechaLocal(d.at), horaLocal(d.at), nombre.get(d.sustanciaId) || d.sustanciaId,
-      d.cantidad, d.unidad, d.via || '', '', '', '', d.notas || '']);
+      d.cantidad ?? '', d.unidad ?? '', d.via || '', '', '', '', d.notas || '']);
+    // Una combinación suma una fila por componente, con su cantidad y su unidad.
+    for (const c of d.componentes || []) {
+      filas.push(['componente', d.id, fechaLocal(d.at), horaLocal(d.at), nombre.get(c.sustanciaId) || c.sustanciaId,
+        c.cantidad, c.unidad, d.via || '', '', '', '', '']);
+    }
     for (const h of [...(d.hitos || [])].sort((a, b) => (a.at || 0) - (b.at || 0))) {
       filas.push(['hito', d.id, fechaLocal(h.at), horaLocal(h.at), nombre.get(d.sustanciaId) || d.sustanciaId,
         '', '', '', h.fase || '', Math.round((h.at - d.at) / 60000), h.intensidad ?? '', h.notas || '']);
