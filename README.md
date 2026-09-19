@@ -82,6 +82,30 @@ correría la mediana al zolpidem solo. Sí cuenta en lo que se tomó: el esquema
 del día del componente, sus series en Gráficos (`aportesDe` en `pk.js`) y el
 filtro del Registro. En el CSV sale una fila `componente` por cada uno.
 
+### El stock
+
+Tercera colección: **ingresos**, cada compra o entrega.
+
+```json
+{ "id": "i-0001", "sustanciaId": "s-0002", "marca": "Nuvigil", "presentacion": "Comprimidos",
+  "carga": 150, "unidad": "mg", "unidadesPorEnvase": 30, "envases": 2, "at": 1789800000000 }
+```
+
+Los ingresos de la misma droga con la misma **carga** (dosis por unidad) se
+suman en un solo stock, sin importar marca ni envase; otra carga es otro stock.
+Cada toma descuenta `cantidad / carga` unidades (300 mg con comprimidos de 150
+son dos; 75 mg, medio), solo si es posterior al primer ingreso de ese stock: lo
+anterior no se compró acá. Lo tomado dentro de combinaciones también descuenta.
+
+Con dos cargas de la misma droga, la toma sale de la que la cubre con un número
+entero de unidades y la menor cantidad de ellas (`cargaParaToma`); el diálogo
+de toma deja elegirla a mano, y entonces queda guardada en la toma como `carga`.
+
+La vista **Stock** muestra una tarjeta por stock, la tabla de ingresos y la
+calculadora de hasta cuándo alcanza: dosificación por día → unidades por día →
+días y fecha, **siempre contados desde hoy**. Debajo, la misma cuenta con el
+esquema fijo y con el ritmo real de los últimos 30 días.
+
 ### Los hitos
 
 Son los checkpoints del episodio, el «14:00 tomo → 15:00 onset → 17:00 va

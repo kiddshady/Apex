@@ -23,6 +23,11 @@ export const VIAS = [
   { id: 'otra',       label: 'Otra' },
 ];
 
+/** Presentaciones de un ingreso: en qué viene cada unidad. */
+export const PRESENTACIONES = [
+  'Comprimidos', 'Comprimidos LP', 'Cápsulas', 'Grageas', 'Sobres', 'Ampollas', 'Parches', 'Frascos', 'Otra',
+];
+
 export const viaLabel = (id) => VIAS.find((v) => v.id === id)?.label || (id ? String(id) : '');
 
 /**

@@ -102,6 +102,17 @@ async function sembrar() {
   }
   await guardar({ sustanciaId: 's-0004', at: Math.max(hoy0 + 5 * MIN, ahora - 2 * HORA), cantidad: 200, unidad: 'mg', via: 'oral', notas: '', hitos: [] });
 
+  /* Stock: tres ingresos, dos de la misma carga que se suman. */
+  const ingresos = store.collection('ingresos');
+  const ingresar = (id, dias, sustanciaId, marca, carga, u, env) => ingresos.save({
+    id, sustanciaId, marca, presentacion: 'Comprimidos', carga, unidad: 'mg', unidadesPorEnvase: u, envases: env,
+    at: hoy0 - dias * DIA + 11 * HORA, notas: '', createdAt: ahora, updatedAt: ahora,
+  });
+  await ingresar('i-0001', 40, 's-0001', 'Vigicer', 200, 30, 1);
+  await ingresar('i-0002', 12, 's-0001', 'Vigicer', 200, 30, 2);
+  await ingresar('i-0003', 20, 's-0005', 'Nocte', 10, 30, 1);
+  await ingresar('i-0004', 6, 's-0004', 'Lamictal', 200, 30, 2);
+
   /* Hoy: un episodio en curso, con onset y pico pero sin fin. */
   const at = ahora - 3 * HORA - 12 * MIN;
   await guardar({
@@ -192,6 +203,13 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('[data-action="nueva-combinacion"]').click(); true`);
   await sleep(700);
   await foto('15-dialogo-combinacion');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await ir('stock');
+  await foto('16-stock');
+  await js(`document.querySelector('[data-action="registrar-ingreso"]').click(); true`);
+  await sleep(700);
+  await foto('17-dialogo-ingreso');
   await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
   await sleep(400);
 

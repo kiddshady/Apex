@@ -142,5 +142,43 @@ es('dos tomas previstas, una hecha hoy', [diaL.hechas, diaL.tomasDia, diaL.compl
 const diaZ = pk.esquemaDelDia(zolpi, [{ ...dz, at: t0, cantidad: 30 }], t0);
 es('una toma por encima del rango se cuenta igual', [diaZ.hechas, diaZ.total], [1, 30]);
 
+console.log('\n10. Stock');
+es('la carga exacta con menos unidades', pk.cargaParaToma(300, [150, 300]), 300);
+es('150 sale de la de 150', pk.cargaParaToma(150, [150, 300]), 150);
+es('sin exacta, la más grande que no se pasa', pk.cargaParaToma(200, [150, 300]), 150);
+es('si todas se pasan, la más chica', pk.cargaParaToma(75, [150, 300]), 150);
+const ing = (id, dias, sustanciaId, carga, u, env) => ({ id, at: t0 - dias * pk.DIA, sustanciaId, carga, unidad: 'mg', unidadesPorEnvase: u, envases: env });
+const ingresos = [
+  ing('i-1', 10, 's-a', 150, 30, 1),
+  ing('i-2', 2, 's-a', 150, 30, 2),     // misma droga y carga: se suma
+  ing('i-3', 5, 's-a', 250, 10, 1),     // otra carga: otro stock
+];
+const toma = (id, dias, cantidad, extra = {}) => ({ id, sustanciaId: 's-a', at: t0 - dias * pk.DIA, cantidad, unidad: 'mg', hitos: [], ...extra });
+const tomas = [
+  toma('t-antes', 12, 150),            // antes del primer ingreso: no descuenta
+  toma('t-1', 9, 150),
+  toma('t-2', 8, 300),                 // dos comprimidos
+  toma('t-3', 4, 250),                 // sale del de 250, que ya existía
+  toma('t-4', 3, 500, { carga: 250 }), // elegida a mano
+  toma('t-5', 1, 75),                  // medio comprimido de 150
+];
+const st = pk.stocks(ingresos, tomas);
+es('un stock por carga', st.map((p) => p.carga), [150, 250]);
+es('los ingresos de la misma carga se suman', st[0].ingresado, 90);
+es('lo anterior al primer ingreso no cuenta', st[0].tomas.map((t) => t.id), ['t-1', 't-2', 't-5']);
+es('se descuenta en unidades, con medios', st[0].consumido, 3.5);
+es('restantes', st[0].restantes, 86.5);
+es('la carga elegida a mano manda', [st[1].consumido, st[1].restantes], [3, 7]);
+const conCombo = pk.stocks([ing('i-z', 3, 's-z', 10, 30, 1)], [dc, { ...dz, at: t0 - pk.DIA }]);
+es('lo tomado en una combinación también descuenta', conCombo[0].consumido, 2);
+es('dosis diaria del esquema fijo', pk.dosisDiariaEsquema({ dosisHabitual: 200, esquema: { modo: 'fijo', tomasDia: 2 } }), 400);
+es('a demanda no tiene dosis diaria', pk.dosisDiariaEsquema({ dosisHabitual: 200, esquema: { modo: 'demanda' } }), null);
+ok('el ritmo real promedia los días', Math.abs(pk.ritmoReal(st[0], t0) - 3.5 / 10) < 1e-9, String(pk.ritmoReal(st[0], t0)));
+es('con menos de un día no hay ritmo', pk.ritmoReal({ ...st[0], desde: t0 - pk.HORA }, t0), null);
+const a = pk.alcanza(90, 1, t0);
+es('90 unidades a 1 por día: 90 días', [a.dias, pk.diaISO(a.hasta)], [90, '2026-12-04']);
+es('a 2 por día con 3: un día', pk.alcanza(3, 2, t0).dias, 1);
+es('sin consumo no hay fecha', pk.alcanza(30, 0, t0), null);
+
 console.log(`\n═══ ${pass} ok · ${fail} fallas ═══\n`);
 process.exit(fail ? 1 : 0);

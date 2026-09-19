@@ -23,10 +23,11 @@ import {
   FASES, faseInfo, ordenarHitos, MODOS_ESQUEMA, MAX_COMPONENTES,
   esCombinacion, normalizarEsquema, esquemaDelDia,
 } from './pk.js';
-import { UNIDADES, VIAS, pasoPara } from './vocab.js';
+import { UNIDADES, VIAS, PRESENTACIONES, pasoPara } from './vocab.js';
 import {
   S, sustancia, dosis as tomarDosis, dosisDe, activas, etiquetaDosis, combinacionesCon, textoEsquema,
   guardarSustancia, guardarDosis, borrarDosis, borrarSustancia, guardarAjustes,
+  stocksActuales, ingreso as tomarIngreso, guardarIngreso, borrarIngreso, nombreSustancia,
 } from './tienda.js';
 import { segmentedHTML } from './vistas/comunes.js';
 
@@ -336,6 +337,7 @@ async function formularioDosis(estado, existente) {
      una simple, uno por componente para una combinación. Se rehace entera y
      entra con el mismo deslizamiento de las vistas. */
   const campos = () => [...zona.querySelectorAll('input[type="number"]')];
+  let selCarga = null;
   const pintarCantidad = (s, { entrar = false } = {}) => {
     if (esCombinacion(s)) {
       rotulo.textContent = 'Cantidades';
@@ -352,10 +354,22 @@ async function formularioDosis(estado, existente) {
     } else {
       rotulo.textContent = 'Cantidad';
       const v = cantTocada ? estado.cantidad : s?.dosisHabitual;
+      /* Con dos cargas en stock (150 y 300, por ejemplo) se puede decir de
+         cuál sale la toma. Con una sola, o ninguna, no hay nada que elegir. */
+      const cargas = stocksActuales().filter((x) => x.sustanciaId === s?.id && x.unidad === s?.unidad);
       zona.innerHTML = `<div class="ox-row" style="gap:10px">
         ${stepperHTML({ id: 'f-cant', valor: v ?? '', step: pasoPara(s?.dosisHabitual), extra: 'style="flex:1 1 auto"' })}
         <span class="ox-label ox-mono" id="f-unidad" style="min-width:40px">${esc(s?.unidad || '')}</span>
-      </div>`;
+      </div>
+      ${cargas.length > 1 ? `<div class="ox-row ap-carga">
+        <span class="ox-meta">Sale del stock de</span>
+        <div class="ox-grow" style="min-width:0">${selectHTML({ id: 'f-carga' })}</div>
+      </div>` : ''}`;
+      selCarga = cargas.length > 1 ? bindSelect(zona.querySelector('#f-carga'), [
+        { value: 'auto', label: 'Automático, según la cantidad' },
+        { sep: true },
+        ...cargas.map((x) => ({ value: x.carga, label: `${fmtDosis(x.carga, x.unidad)} por unidad · quedan ${fmtQty(Math.max(0, x.restantes))}`, icon: 'stock' })),
+      ], { valor: existente?.sustanciaId === s.id && cargas.some((x) => x.carga === Number(existente?.carga)) ? Number(existente.carga) : 'auto' }) : null;
     }
     rotulo.setAttribute('for', campos()[0]?.id || '');
     zona.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, () => { tocar(s); validar(); }));
@@ -438,6 +452,9 @@ async function formularioDosis(estado, existente) {
     item.unidad = s.unidad;
     delete item.componentes;
   }
+  // La carga elegida a mano se guarda; «automático» no deja rastro.
+  if (!esCombinacion(s) && selCarga && selCarga.valor !== 'auto') item.carga = Number(selCarga.valor);
+  else delete item.carga;
   const saved = await attempt(() => guardarDosis(item), { errorTitle: 'No se pudo guardar la toma' });
   if (!saved) return null;
   attempt(() => guardarAjustes({ ultimaSustancia: s.id }), { errorTitle: 'No se pudo recordar la sustancia' });
@@ -751,6 +768,174 @@ export async function borrarHito(d, hitoId) {
   return saved;
 }
 
+/* ══ Ingreso de stock ════════════════════════════════════════════════════════ */
+
+/**
+ * Un ingreso: cuántos envases de qué presentación entraron, y cuándo. Al
+ * elegir la droga propone lo del último ingreso de esa droga —marca,
+ * presentación, carga, unidades por envase—, que es lo que se repite.
+ */
+export async function dialogoIngreso({ existente = null, sustanciaId = null } = {}) {
+  const usadas = new Set(existente ? [existente.sustanciaId] : []);
+  const opciones = S.sustancias.filter((s) => !esCombinacion(s) && (!s.archivada || usadas.has(s.id)));
+  if (!opciones.length) {
+    Toast.show({ title: 'Primero, una sustancia', text: 'Un ingreso dice de qué droga es: creala en Sustancias.', icon: 'pill' });
+    return null;
+  }
+  const ultimoDe = (id) => S.ingresos.find((i) => i.sustanciaId === id) || null;
+  const id0 = existente?.sustanciaId || (sustancia(sustanciaId) && !esCombinacion(sustancia(sustanciaId)) ? sustanciaId : null) || opciones[0].id;
+  const base = existente || ultimoDe(id0) || {};
+  const s0 = sustancia(id0);
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  body.innerHTML = `
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label">Droga</label>
+        ${selectHTML({ id: 'f-sust', placeholder: 'Elegir sustancia' })}
+      </div>
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-marca">Marca</label>
+        <input class="ox-input" id="f-marca" placeholder="Nuvigil" spellcheck="false" autocomplete="off" value="${esc(base.marca || '')}">
+      </div>
+    </div>
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label">Presentación</label>
+        ${selectHTML({ id: 'f-pres', placeholder: 'Comprimidos' })}
+      </div>
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-carga">Dosis por unidad</label>
+        <div class="ox-row" style="gap:10px">
+          ${stepperHTML({ id: 'f-carga', valor: base.carga ?? s0?.dosisHabitual ?? '', step: pasoPara(base.carga ?? s0?.dosisHabitual), extra: 'style="flex:1 1 auto"' })}
+          <span class="ox-label ox-mono" id="f-unidad" style="min-width:40px">${esc(s0?.unidad || '')}</span>
+        </div>
+      </div>
+    </div>
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-upe">Unidades por envase</label>
+        ${stepperHTML({ id: 'f-upe', valor: base.unidadesPorEnvase ?? 30, min: 1, step: 1, placeholder: '30' })}
+      </div>
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-env">Envases</label>
+        ${stepperHTML({ id: 'f-env', valor: existente?.envases ?? 1, min: 1, step: 1, placeholder: '1' })}
+      </div>
+    </div>
+    <div class="ap-aviso ap-aviso--total" id="f-total"></div>
+    ${campoMomento({ id: 'f-momento', label: 'Cuándo entró', ms: existente?.at ?? Date.now() })}
+    <span class="ox-field__hint" style="margin-top:-10px">Las tomas descuentan desde este momento; las anteriores no.</span>
+    <div class="ox-field">
+      <label class="ox-field__label" for="f-notas">Notas</label>
+      <textarea class="ox-textarea" id="f-notas" rows="2" placeholder="Farmacia, receta, lote, vencimiento…">${esc(existente?.notas || '')}</textarea>
+    </div>`;
+
+  const p = Modal.show({
+    title: existente ? 'Editar ingreso' : 'Registrar ingreso',
+    sub: existente ? '' : 'Lo que entra al stock. La misma droga con la misma dosis por unidad se suma, sea de la marca que sea.',
+    body,
+    width: 580,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: existente ? 'Guardar' : 'Registrar', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const marca = body.querySelector('#f-marca');
+  const carga = body.querySelector('#f-carga');
+  const upe = body.querySelector('#f-upe');
+  const env = body.querySelector('#f-env');
+  const total = body.querySelector('#f-total');
+  const unidadEl = body.querySelector('#f-unidad');
+
+  const selP = bindSelect(body.querySelector('#f-pres'), PRESENTACIONES.map((x) => ({ value: x, label: x })), { valor: base.presentacion || PRESENTACIONES[0] });
+  const selS = bindSelect(body.querySelector('#f-sust'),
+    opciones.map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: 'pill' })), {
+      valor: id0,
+      onChange: (v) => {
+        const s = sustancia(v);
+        const u = ultimoDe(v);
+        unidadEl.textContent = s?.unidad || '';
+        // Otra droga: lo propuesto es lo de su último ingreso, o su dosis habitual.
+        carga.value = u?.carga ?? s?.dosisHabitual ?? '';
+        carga.step = pasoPara(carga.value);
+        if (u) { marca.value = u.marca || ''; upe.value = u.unidadesPorEnvase ?? upe.value; selP.set(u.presentacion || PRESENTACIONES[0]); }
+        validar();
+      },
+    });
+  const momento = cablearMomento(body, 'f-momento', () => validar());
+  body.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, () => validar()));
+  [carga, upe, env].forEach((c) => c.addEventListener('input', () => validar()));
+
+  const validar = () => {
+    const s = sustancia(selS.valor);
+    const c = numero(carga.value); const u = numero(upe.value); const e = numero(env.value);
+    const ok = !!s && c > 0 && u > 0 && e > 0 && momento.leer() != null;
+    total.innerHTML = ok
+      ? `${Icons.svg('stock')}<div>Entran <b>${esc(fmtQty(u * e))} ${esc(selP.valor.toLowerCase())}</b> de ${esc(fmtDosis(c, s.unidad))} de ${esc(s.nombre)}.</div>`
+      : `${Icons.svg('stock')}<div>Completá la dosis por unidad, las unidades y los envases.</div>`;
+    if (primario) primario.disabled = !ok;
+  };
+  validar();
+  enterEnvia(body);
+  setTimeout(() => { marca.focus(); marca.select(); }, 80);
+
+  const ok = await p;
+  if (!ok) return null;
+  const s = sustancia(selS.valor);
+  const item = {
+    ...(existente || {}),
+    sustanciaId: s.id,
+    marca: marca.value.trim(),
+    presentacion: selP.valor,
+    carga: numero(carga.value),
+    unidad: existente?.sustanciaId === s.id ? (existente.unidad || s.unidad) : s.unidad,
+    unidadesPorEnvase: numero(upe.value),
+    envases: numero(env.value),
+    at: momento.leer(),
+    notas: body.querySelector('#f-notas').value.trim(),
+  };
+  const saved = await attempt(() => guardarIngreso(item), { errorTitle: 'No se pudo guardar el ingreso' });
+  if (saved) {
+    Toast.show({
+      title: existente ? 'Ingreso actualizado' : 'Ingreso registrado',
+      text: `${s.nombre} ${fmtDosis(saved.carga, saved.unidad)} · ${fmtQty(saved.unidadesPorEnvase * saved.envases)} unidades`,
+      icon: 'stock',
+    });
+  }
+  return saved;
+}
+
+export async function confirmarBorrarIngreso(id) {
+  const i = tomarIngreso(id);
+  if (!i) return false;
+  const ok = await Modal.confirm({
+    title: '¿Eliminar este ingreso?',
+    sub: `${nombreSustancia(i.sustanciaId)} ${fmtDosis(i.carga, i.unidad)} · ${fmtQty(i.unidadesPorEnvase * i.envases)} unidades del ${fmtDiaSemana(i.at)}. El stock se recalcula sin él.`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return false;
+  const hecho = await attempt(async () => { await borrarIngreso(id); return true; }, { errorTitle: 'No se pudo eliminar el ingreso' });
+  if (hecho) Toast.show({ title: 'Ingreso eliminado', icon: 'trash' });
+  return !!hecho;
+}
+
+export function menuIngreso(id, { despues } = {}) {
+  const luego = (fn) => async () => { await fn(); despues?.(); };
+  return [
+    { label: 'Editar…', icon: 'edit', onSelect: luego(async () => { const i = tomarIngreso(id); if (i) await dialogoIngreso({ existente: i }); }) },
+    { label: 'Repetir ahora…', icon: 'retry', onSelect: luego(async () => {
+      const i = tomarIngreso(id);
+      if (i) await dialogoIngreso({ sustanciaId: i.sustanciaId });
+    }) },
+    { sep: true },
+    { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(() => confirmarBorrarIngreso(id)) },
+  ];
+}
+
 /* ══ Confirmaciones ══════════════════════════════════════════════════════════ */
 
 export async function confirmarBorrarDosis(id) {
@@ -849,6 +1034,7 @@ export function menuSustancia(id, { despues } = {}) {
     { label: 'Abrir', icon: 'external', onSelect: () => Router.go('sustancia', id) },
     { label: 'Registrar dosis…', icon: 'gota', onSelect: luego(() => dialogoDosis({ sustanciaId: id })) },
     { label: 'Editar…', icon: 'edit', onSelect: luego(async () => { if (s) await dialogoSustancia(s); }) },
+    ...(esCombinacion(s) ? [] : [{ label: 'Registrar ingreso de stock…', icon: 'stock', onSelect: luego(() => dialogoIngreso({ sustanciaId: id })) }]),
     { label: s?.archivada ? 'Recuperar' : 'Archivar', icon: 'archivar', onSelect: luego(() => archivarSustancia(id, !s?.archivada)) },
     { sep: true },
     { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(async () => {

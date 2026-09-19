@@ -69,6 +69,11 @@ Icons.add({
   esquema: '<circle cx="3.4" cy="4" r="1.4" fill="currentColor" stroke="none"/><circle cx="3.4" cy="8" r="1.4" fill="currentColor" stroke="none"/>'
          + '<circle cx="3.4" cy="12" r="1.3"/><path d="M6.6 4h7.2M6.6 8h7.2M6.6 12h7.2"/>',
 
+  /* Blíster: el stock. Una placa con dos filas de alvéolos, uno ya vacío. */
+  stock: '<rect x="1.9" y="3" width="12.2" height="10" rx="1.8"/>'
+       + '<circle cx="5.2" cy="6.4" r="1.3"/><circle cx="8" cy="6.4" r="1.3"/><circle cx="10.8" cy="6.4" r="1.3" fill="currentColor" stroke="none"/>'
+       + '<circle cx="5.2" cy="9.6" r="1.3" fill="currentColor" stroke="none"/><circle cx="8" cy="9.6" r="1.3" fill="currentColor" stroke="none"/><circle cx="10.8" cy="9.6" r="1.3" fill="currentColor" stroke="none"/>',
+
   /* Caja archivada: la sustancia que ya no se usa pero cuyas tomas quedan. */
   archivar: '<rect x="1.9" y="2.4" width="12.2" height="3.2" rx="1.1"/>'
           + '<path d="M3.2 5.6v6.5a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.6"/>'

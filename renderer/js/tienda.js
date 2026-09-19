@@ -14,19 +14,21 @@
 
 import { relTime, fmtDosis, fmtQty } from './format.js';
 import { esc, path as rutaHTML } from './ui.js';
-import { estadoDosis, esCombinacion, normalizarEsquema } from './pk.js';
+import { estadoDosis, esCombinacion, normalizarEsquema, stocks } from './pk.js';
 
 export const api = window.onyx;
 export const apex = window.apex;
 
 const colSustancias = api.col('sustancias');
 const colDosis = api.col('dosis');
+const colIngresos = api.col('ingresos');
 
 export const S = {
   info: null,
   ajustes: {},
   sustancias: [],
   dosis: [],           // siempre de la más reciente a la más vieja
+  ingresos: [],        // idem
   ultimoGuardado: null,
 };
 
@@ -34,9 +36,10 @@ const porFechaDesc = (a, b) => (b.at || 0) - (a.at || 0);
 const porNombre = (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
 
 export async function cargarTodo() {
-  const [info, ajustes, sustancias, dosis] = await Promise.all([
-    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(),
+  const [info, ajustes, sustancias, dosis, ingresos] = await Promise.all([
+    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(), colIngresos.list(),
   ]);
+  S.ingresos = ingresos.sort(porFechaDesc);
   S.info = info;
   S.ajustes = ajustes;
   S.sustancias = sustancias.sort(porNombre);
@@ -82,6 +85,10 @@ export function textoEsquema(s) {
     rango ? `${rango} por toma` : null,
   ].filter(Boolean).join(' · ');
 }
+
+/** Los stocks de ahora, calculados sobre el espejo. */
+export const stocksActuales = () => stocks(S.ingresos, S.dosis);
+export const ingreso = (id) => S.ingresos.find((i) => i.id === id) || null;
 
 /** Las combinaciones que llevan a esta sustancia adentro. */
 export const combinacionesCon = (id) => S.sustancias.filter((s) => esCombinacion(s) && s.componentes.some((c) => c.sustanciaId === id));
@@ -135,6 +142,22 @@ export async function borrarDosis(id) {
   tocar();
 }
 
+export async function guardarIngreso(i) {
+  const ahora = Date.now();
+  const item = { ...i, createdAt: i.createdAt || ahora, updatedAt: ahora };
+  if (!item.id) item.id = await colIngresos.nextId('i');
+  await colIngresos.save(item);
+  S.ingresos = [...S.ingresos.filter((x) => x.id !== item.id), item].sort(porFechaDesc);
+  tocar();
+  return item;
+}
+
+export async function borrarIngreso(id) {
+  await colIngresos.remove(id);
+  S.ingresos = S.ingresos.filter((x) => x.id !== id);
+  tocar();
+}
+
 export async function guardarAjustes(patch) {
   S.ajustes = await api.settings.save(patch);
   tocar();
@@ -151,6 +174,7 @@ function set(id, valor) {
 export function pintarChrome() {
   set('cuenta-dosis', S.dosis.length);
   set('cuenta-sustancias', activas().length);
+  set('cuenta-stock', stocksActuales().filter((p) => p.restantes > 0).length);
   set('stat-dosis', S.dosis.length);
 
   const ult = S.dosis[0];

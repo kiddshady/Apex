@@ -16,7 +16,10 @@ import { initClickFlash, initScrollFades, raf2 } from './motion.js';
 import { paint, empty, colorToken, copy, setStateLabels } from './ui.js';
 import { designHTML, wireDesign } from './design-view.js';
 import { S, api, cargarTodo, pintarChrome, activas, dosis as tomarDosis, sustancia, setContexto, habitualSustancia } from './tienda.js';
-import { dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, menuDosis, menuSustancia, confirmarBorrarDosis } from './dialogos.js';
+import {
+  dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, dialogoIngreso,
+  menuDosis, menuSustancia, menuIngreso, confirmarBorrarDosis,
+} from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
 
 import { vistaInicio } from './vistas/inicio.js';
@@ -24,6 +27,7 @@ import { vistaRegistro } from './vistas/registro.js';
 import { vistaDosis } from './vistas/dosis.js';
 import { vistaSustancias, vistaSustancia } from './vistas/sustancias.js';
 import { vistaGraficos } from './vistas/graficos.js';
+import { vistaStock } from './vistas/stock.js';
 import { vistaAjustes } from './vistas/ajustes.js';
 import { viewEl, head } from './ui.js';
 
@@ -52,6 +56,7 @@ Router.define({
   dosis: { view: vistaDosis, nav: 'registro' },          // el detalle sigue iluminando Registro
   sustancias: { view: vistaSustancias },
   sustancia: { view: vistaSustancia, nav: 'sustancias' },
+  stock: { view: vistaStock },
   graficos: { view: vistaGraficos },
   piezas: { view: vistaPiezas },
   ajustes: { view: vistaAjustes },
@@ -74,6 +79,10 @@ async function nuevaSustancia() {
 async function nuevaCombinacion() {
   const s = await dialogoCombinacion();
   if (s) Router.go('sustancia', s.id) || Router.refresh();
+}
+
+async function registrarIngreso(sustanciaId = null) {
+  if (await dialogoIngreso({ sustanciaId })) Router.name === 'stock' ? Router.refresh() : Router.go('stock');
 }
 
 async function agregarHito(id) {
@@ -117,7 +126,9 @@ function cablearShell() {
         ? menuDosis(arg, { despues: () => Router.refresh() })
         : trigger.dataset.menu === 'sustancia'
           ? menuSustancia(arg, { despues: () => Router.refresh() })
-          : null;
+          : trigger.dataset.menu === 'ingreso'
+            ? menuIngreso(arg, { despues: () => Router.refresh() })
+            : null;
       if (items) Menu.show(trigger, items, { align: 'end' });
       return;
     }
@@ -140,6 +151,7 @@ function cablearShell() {
       if (a === 'registrar') registrar();
       else if (a === 'nueva-sustancia') nuevaSustancia();
       else if (a === 'nueva-combinacion') nuevaCombinacion();
+      else if (a === 'registrar-ingreso') registrarIngreso(act.dataset.arg || null);
       else if (a === 'eliminar-dosis') {
         confirmarBorrarDosis(act.dataset.arg).then((ok) => {
           if (!ok) return;
@@ -181,6 +193,8 @@ function registrarComandos() {
     })),
     { id: 'nueva-sustancia', group: 'Crear', icon: 'pill', label: 'Nueva sustancia', run: () => nuevaSustancia() },
     { id: 'nueva-combinacion', group: 'Crear', icon: 'combinacion', label: 'Nueva combinación', run: () => nuevaCombinacion() },
+    { id: 'registrar-ingreso', group: 'Crear', icon: 'stock', label: 'Registrar ingreso de stock', run: () => registrarIngreso() },
+    { id: 'nav-stock', group: 'Ir a', icon: 'stock', label: 'Stock', run: () => Router.go('stock') },
     { id: 'nav-inicio', group: 'Ir a', icon: 'home', label: 'Hoy', run: () => Router.go('inicio') },
     { id: 'nav-registro', group: 'Ir a', icon: 'list', label: 'Registro', run: () => Router.go('registro') },
     { id: 'nav-sustancias', group: 'Ir a', icon: 'pill', label: 'Sustancias', run: () => Router.go('sustancias') },

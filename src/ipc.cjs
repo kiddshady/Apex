@@ -21,8 +21,9 @@ const store = require('./store.cjs');
    sueltas en tu directorio de datos.
 
      sustancias  → lo que se toma: nombre, unidad, dosis habitual, vía.
-     dosis       → cada toma, con sus hitos (onset, pico, fin…) adentro. */
-const COLLECTIONS = ['sustancias', 'dosis'];
+     dosis       → cada toma, con sus hitos (onset, pico, fin…) adentro.
+     ingresos    → cada compra o entrega: cuántas unidades de qué carga. */
+const COLLECTIONS = ['sustancias', 'dosis', 'ingresos'];
 
 function coll(name) {
   if (!COLLECTIONS.includes(name)) throw new Error(`colección no permitida: ${name}`);
@@ -153,10 +154,10 @@ function register({ onAjustes } = {}) {
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (res.canceled || !res.filePath) return { cancelado: true };
-    const [sustancias, dosis, ajustes] = await Promise.all([
-      coll('sustancias').list(), coll('dosis').list(), store.loadSettings(),
+    const [sustancias, dosis, ingresos, ajustes] = await Promise.all([
+      coll('sustancias').list(), coll('dosis').list(), coll('ingresos').list(), store.loadSettings(),
     ]);
-    const todo = { app: 'apex', exportado: new Date().toISOString(), ajustes, sustancias, dosis };
+    const todo = { app: 'apex', exportado: new Date().toISOString(), ajustes, sustancias, dosis, ingresos };
     await fsp.writeFile(res.filePath, JSON.stringify(todo, null, 2), 'utf8');
     return { cancelado: false, ruta: res.filePath };
   });

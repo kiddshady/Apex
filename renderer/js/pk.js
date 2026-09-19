@@ -388,6 +388,108 @@ export function esquemaDelDia(s, dosis, ahora = Date.now()) {
   };
 }
 
+/* ── Stock ───────────────────────────────────────────────────────────────────
+   Un ingreso es una compra o una entrega: tantos envases de tantas unidades,
+   cada unidad con su carga (150 mg por comprimido). Los ingresos de la misma
+   droga con la misma carga se suman en un solo stock, sin importar marca ni
+   envase: 150 mg de armodafinilo son 150 mg de armodafinilo. Con otra carga
+   es otro stock.
+
+   Las tomas descuentan solo a partir del primer ingreso de ese stock: lo que
+   pasó antes no se compró acá. Una toma de 300 mg con comprimidos de 150 son
+   dos unidades; una de 75, media. */
+
+export const unidadesIngreso = (i) => (Number(i.unidadesPorEnvase) || 0) * (Number(i.envases) || 0);
+
+/**
+ * De qué carga sale una toma cuando hay más de una: la que la cubre con un
+ * número entero de unidades y la menor cantidad de ellas; si ninguna es
+ * exacta, la más grande que no se pasa; si todas se pasan, la más chica.
+ */
+export function cargaParaToma(cantidad, cargas) {
+  const c = [...new Set(cargas.map(Number))].filter((x) => x > 0);
+  const q = Number(cantidad);
+  if (!c.length || !(q > 0)) return null;
+  const exactas = c.filter((x) => Math.abs(q / x - Math.round(q / x)) < 1e-9);
+  if (exactas.length) return Math.max(...exactas);
+  const menores = c.filter((x) => x <= q);
+  return menores.length ? Math.max(...menores) : Math.min(...c);
+}
+
+/**
+ * Los stocks: uno por sustancia + carga + unidad, con lo ingresado, lo
+ * consumido (en unidades, puede ser fraccionario) y lo que queda. Una toma que
+ * trae `carga` (elegida a mano en el diálogo) sale de ese stock si existe; si
+ * no, de cargaParaToma. Lo tomado dentro de combinaciones también descuenta.
+ */
+export function stocks(ingresos, dosis) {
+  const pools = new Map();
+  for (const i of ingresos) {
+    const carga = Number(i.carga);
+    if (!i.sustanciaId || !(carga > 0) || !Number.isFinite(Number(i.at))) continue;
+    const clave = `${i.sustanciaId}|${carga}|${i.unidad}`;
+    let p = pools.get(clave);
+    if (!p) {
+      p = { clave, sustanciaId: i.sustanciaId, carga, unidad: i.unidad, desde: i.at, ingresado: 0, consumido: 0, ingresos: [], tomas: [] };
+      pools.set(clave, p);
+    }
+    p.desde = Math.min(p.desde, i.at);
+    p.ingresado += unidadesIngreso(i);
+    p.ingresos.push(i);
+  }
+
+  const lista = [...pools.values()];
+  for (const id of new Set(lista.map((p) => p.sustanciaId))) {
+    const propios = lista.filter((p) => p.sustanciaId === id);
+    for (const d of aportesDe(id, dosis)) {
+      const cant = Number(d.cantidad);
+      if (!(cant > 0)) continue;
+      const candidatos = propios.filter((p) => p.unidad === d.unidad && p.desde <= d.at);
+      if (!candidatos.length) continue;
+      let p = !d.combinacion && d.carga != null ? candidatos.find((x) => x.carga === Number(d.carga)) : null;
+      if (!p) {
+        const c = cargaParaToma(cant, candidatos.map((x) => x.carga));
+        p = candidatos.find((x) => x.carga === c);
+      }
+      const unidades = cant / p.carga;
+      p.consumido += unidades;
+      p.tomas.push({ id: d.id, at: d.at, cantidad: cant, unidades, combinacion: d.combinacion || null });
+    }
+  }
+  return lista
+    .map((p) => ({ ...p, restantes: p.ingresado - p.consumido, tomas: p.tomas.sort((a, b) => a.at - b.at) }))
+    .sort((a, b) => a.sustanciaId.localeCompare(b.sustanciaId) || a.carga - b.carga);
+}
+
+/** La dosis diaria que dice el esquema fijo (tomas × habitual), o null. */
+export function dosisDiariaEsquema(s) {
+  const e = normalizarEsquema(s?.esquema);
+  return e?.modo === 'fijo' && Number(s.dosisHabitual) > 0 ? e.tomasDia * Number(s.dosisHabitual) : null;
+}
+
+/**
+ * Unidades por día al ritmo real: lo consumido de este stock en los últimos
+ * `dias` días (o desde el primer ingreso, si es más reciente). Con menos de un
+ * día de historia no hay ritmo que medir.
+ */
+export function ritmoReal(stock, ahora = Date.now(), dias = 30) {
+  const desde = Math.max(stock.desde, ahora - dias * DIA);
+  const lapso = (ahora - desde) / DIA;
+  if (lapso < 1) return null;
+  const u = stock.tomas.filter((t) => t.at >= desde && t.at <= ahora).reduce((n, t) => n + t.unidades, 0);
+  return u / lapso;
+}
+
+/**
+ * Hasta cuándo alcanza lo que queda a `porDia` unidades por día: la cantidad
+ * de días enteros y el último día cubierto. null si no hay consumo.
+ */
+export function alcanza(restantes, porDia, ahora = Date.now()) {
+  if (!(porDia > 0)) return null;
+  const dias = Math.max(0, Math.floor(restantes / porDia + 1e-9));
+  return { dias, hasta: sumarDias(inicioDia(ahora), dias) };
+}
+
 /** Totales de una lista de tomas. */
 export function totales(lista) {
   let total = 0; let ultima = null; let primera = null;

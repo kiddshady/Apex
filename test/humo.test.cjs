@@ -175,7 +175,7 @@ app.whenReady().then(async () => {
   ok('la duración aparece en la cabecera', (await texto('.ap-cardchart .ox-card__head')).includes('duró 5 h'));
 
   console.log('\n5. Todas las vistas montan');
-  for (const v of ['registro', 'sustancias', 'graficos', 'piezas', 'ajustes', 'inicio']) {
+  for (const v of ['registro', 'sustancias', 'stock', 'graficos', 'piezas', 'ajustes', 'inicio']) {
     await click(`[data-view="${v}"]`);
     await sleep(700);
     const hijos = await js(`document.getElementById('view').children.length`);
@@ -461,6 +461,52 @@ app.whenReady().then(async () => {
 
   const csv2 = await ipc.armarCSV();
   ok('el CSV abre la combinación en una fila por componente', csv2.split('\r\n').filter((l) => l.startsWith('"componente"')).length === 2);
+
+  console.log('\n18. Stock');
+  await click('[data-view="stock"]');
+  await sleep(700);
+  ok('sin ingresos, ofrece registrar el primero', await existe('.ox-empty [data-action="registrar-ingreso"]'));
+  await click('.ox-empty [data-action="registrar-ingreso"]');
+  await sleep(600);
+  ok('el diálogo de ingreso abre', await existe('.ox-modal #f-upe'));
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  ok('propone la dosis habitual como dosis por unidad', (await js(`document.querySelector('#f-carga').value`)) === '150');
+  await escribir('#f-marca', 'Nuvigil');
+  await escribir('#f-upe', '30');
+  await escribir('#f-env', '2');
+  // A las 23:58: después de todo lo que los pasos anteriores registraron hoy.
+  await escribir('#f-momento-hora', '2358');
+  ok('el total se cuenta solo', (await texto('#f-total')).includes('60 comprimidos'), await texto('#f-total'));
+  await primario();
+  const ingr = await js(`window.onyx.col('ingresos').list()`);
+  ok('el ingreso quedó en disco', ingr.length === 1 && ingr[0].carga === 150 && ingr[0].envases === 2 && ingr[0].marca === 'Nuvigil', JSON.stringify(ingr));
+  ok('Stock muestra una tarjeta con 60', (await cuenta('.ap-stock')) === 1 && (await texto('.ap-stock__cifra b')) === '60');
+  ok('la toma de ayer, anterior al ingreso, no descontó', (await texto('.ap-stock__meta')).includes('de 60 ingresadas'));
+
+  await click('#btn-registrar'); await sleep(600);
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  await escribir('#f-cant', '300');
+  await escribir('#f-momento-hora', '2359');
+  ok('con una sola carga no pregunta de qué stock sale', !(await existe('#f-carga')));
+  await primario();
+  await click('[data-view="stock"]'); await sleep(700);
+  ok('una toma de 300 descuenta dos comprimidos', (await texto('.ap-stock__cifra b')) === '58');
+  ok('el rail cuenta el stock', (await texto('#cuenta-stock')) === '1');
+  ok('la calculadora propone la dosis habitual', (await js(`document.querySelector('#c-dosis').value`)) === '150');
+  ok('y dice hasta cuándo alcanza, desde hoy', (await texto('#c-res')).includes('1 unidad por día') && (await texto('#c-res')).includes('58 días desde hoy'), await texto('#c-res'));
+  await escribir('#c-dosis', '300');
+  ok('cambiar la dosificación recalcula sin repintar', (await texto('#c-res')).includes('2 unidades por día') && (await texto('#c-res')).includes('29 días'));
+
+  await click('[data-action="registrar-ingreso"]'); await sleep(600);
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  await escribir('#f-carga', '50');
+  await escribir('#f-env', '1');
+  await primario();
+  ok('otra carga es otro stock', (await cuenta('.ap-stock')) === 2);
+  await click('#btn-registrar'); await sleep(600);
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  ok('con dos cargas, el diálogo de toma pregunta de cuál sale', await existe('#f-carga'));
+  await click('[data-dismiss]'); await sleep(400);
 
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');

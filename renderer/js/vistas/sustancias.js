@@ -10,7 +10,7 @@ import { fmtDosis, fmtQty, fmtMin, fmtHM, fmtDiaSemana, fmtOffset, relTime, mono
 import { perfil, curvas, curvaMediana, totales, ordenarHitos, sumarDias, inicioDia, esCombinacion, MIN } from '../pk.js';
 import {
   S, sustancia, dosisDe, setContexto, guardarSustancia,
-  cantidadDosis, habitualSustancia, textoEsquema, combinacionesCon,
+  cantidadDosis, habitualSustancia, textoEsquema, combinacionesCon, stocksActuales,
 } from '../tienda.js';
 import { viaLabel } from '../vocab.js';
 import { grafCurvas } from '../graficos.js';
@@ -116,6 +116,7 @@ export function vistaSustancia(id) {
   const combo = esCombinacion(s);
   const enCombos = combo ? [] : combinacionesCon(s.id);
   const habitual = habitualSustancia(s);
+  const stockDe = combo ? [] : stocksActuales().filter((p) => p.sustanciaId === s.id);
 
   setContexto(`${Icons.svg(combo ? 'combinacion' : 'pill', 'ox-icon--sm')}<span>${esc(s.nombre)}</span>`);
   paint(head({
@@ -207,7 +208,10 @@ export function vistaSustancia(id) {
             <span class="ox-kv__k">Esquema</span><span class="ox-kv__v">${esc(textoEsquema(s) || '—')}</span>
             <span class="ox-kv__k">Vía</span><span class="ox-kv__v">${esc(s.via ? viaLabel(s.via) : '—')}</span>
             <span class="ox-kv__k">Vida media</span><span class="ox-kv__v ox-num">${esc(s.vidaMedia ? `${fmtQty(s.vidaMedia)} h` : '—')}</span>
-            <span class="ox-kv__k">Total</span><span class="ox-kv__v ox-num">${esc(t.tomas ? fmtDosis(t.total, s.unidad) : '—')}</span>`}
+            <span class="ox-kv__k">Total</span><span class="ox-kv__v ox-num">${esc(t.tomas ? fmtDosis(t.total, s.unidad) : '—')}</span>
+            <span class="ox-kv__k">Stock</span><span class="ox-kv__v ox-num">${stockDe.length
+    ? stockDe.map((p) => `<span data-goto="stock" role="button" tabindex="0">${esc(`${fmtQty(Math.max(0, Math.round(p.restantes * 100) / 100))} de ${fmtDosis(p.carga, p.unidad)}`)}</span>`).join('<br>')
+    : '—'}</span>`}
             <span class="ox-kv__k">Primera</span><span class="ox-kv__v">${esc(t.primera ? fmtDiaSemana(t.primera) : '—')}</span>
             <span class="ox-kv__k">Creada</span><span class="ox-kv__v">${esc(relTime(s.createdAt))}</span>
           </div>
