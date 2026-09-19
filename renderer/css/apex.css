@@ -11,6 +11,11 @@
    navegador para [hidden]. Sin esto, el ítem escondido sigue ocupando lugar. */
 [hidden] { display: none !important; }
 
+/* Apex arma sus medidores con <span> (van dentro de filas de texto). El
+   relleno inline ignora el `width: var(--ox-pct)` y la barra salía vacía: la
+   intensidad de los hitos nunca se pintó hasta que el stock lo hizo notar. */
+.ox-meter__fill { display: block; }
+
 /* ── Cifras del tablero ──────────────────────────────────────────────────── */
 .ap-kpis {
   display: grid;
