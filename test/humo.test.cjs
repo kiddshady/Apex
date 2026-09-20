@@ -266,15 +266,11 @@ app.whenReady().then(async () => {
   await js(`document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true`);
   await sleep(400);
 
-  await click('#btn-palette');
-  await sleep(500);
-  const pal = await rect('.ox-palette');
-  ok('la paleta abre centrada y visible', pal && pal.t > 0 && Math.abs(pal.cx - W / 2) < 4, JSON.stringify(pal));
-  const ph = await js(`document.querySelector('.ox-palette__input')?.placeholder || ''`);
-  ok('con el vocabulario de Apex en el campo vacío', /sustancias|tomas/.test(ph) && !/pipeline|agente/i.test(ph), ph);
-  const cmds = await js(`[...document.querySelectorAll('.ox-palette__item')].map(b => b.textContent.trim())`);
-  ok('ofrece registrar la dosis habitual', cmds.some((c) => c.includes('Modafinilo 200 mg')), cmds.join('|'));
-  await click('.ox-scrim'); await sleep(400);
+  ok('no queda el botón de comandos', !(await js(`document.querySelector('#btn-palette')`)));
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control'] });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control'] });
+  await sleep(200);
+  ok('Ctrl+K no abre una paleta', !(await js(`document.querySelector('.ox-palette')`)));
 
   console.log('\n11. Eliminar pasa por confirmación');
   await js(`window.__apex.Router.go('dosis', ${JSON.stringify(dosis.id)}); true`);

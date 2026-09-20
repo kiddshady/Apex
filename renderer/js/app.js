@@ -2,7 +2,7 @@
    APEX — arranque y shell
 
    Acá se cablea lo que vive fuera de las vistas: los controles de ventana, el
-   rail, la paleta de comandos, la delegación global de clicks y el teclado.
+   rail, la delegación global de clicks y el teclado.
    Las vistas están en `vistas/`, el estado en `tienda.js`, los diálogos en
    `dialogos.js`.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -10,12 +10,11 @@
 import { Icons } from './icons.js';
 import './iconos-apex.js';
 import { Tooltip, Menu } from './overlays.js';
-import Palette from './palette.js';
 import Router from './router.js';
 import { initClickFlash, initScrollFades, raf2 } from './motion.js';
 import { paint, empty, colorToken, copy, setStateLabels } from './ui.js';
 import { designHTML, wireDesign } from './design-view.js';
-import { S, api, cargarTodo, pintarChrome, activas, dosis as tomarDosis, sustancia, setContexto, habitualSustancia } from './tienda.js';
+import { S, api, cargarTodo, pintarChrome, dosis as tomarDosis, sustancia, setContexto } from './tienda.js';
 import {
   dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, dialogoIngreso,
   menuDosis, menuSustancia, menuIngreso, confirmarBorrarDosis,
@@ -106,7 +105,6 @@ function cablearShell() {
 
   document.querySelectorAll('.ox-navitem').forEach((b) =>
     b.addEventListener('click', () => Router.go(b.dataset.view)));
-  document.getElementById('btn-palette').addEventListener('click', () => Palette.toggle());
   document.getElementById('btn-registrar').addEventListener('click', () => registrar());
 
   /* Delegación global, cableada UNA vez sobre document: las vistas se repintan
@@ -180,34 +178,6 @@ function cablearShell() {
   });
 }
 
-/* ══ Comandos ════════════════════════════════════════════════════════════════ */
-
-function registrarComandos() {
-  Palette.clear();
-  Palette.register([
-    { id: 'registrar', group: 'Registrar', icon: 'plus', label: 'Registrar dosis', hint: 'Ctrl N', run: () => registrar() },
-    ...activas().filter((s) => habitualSustancia(s)).map((s) => ({
-      id: `rapida-${s.id}`, group: 'Registrar', icon: s.componentes?.length ? 'combinacion' : 'gota',
-      label: `${s.nombre} ${habitualSustancia(s)}`, hint: 'habitual',
-      run: () => registrar(s.id),
-    })),
-    { id: 'nueva-sustancia', group: 'Crear', icon: 'pill', label: 'Nueva sustancia', run: () => nuevaSustancia() },
-    { id: 'nueva-combinacion', group: 'Crear', icon: 'combinacion', label: 'Nueva combinación', run: () => nuevaCombinacion() },
-    { id: 'registrar-ingreso', group: 'Crear', icon: 'stock', label: 'Registrar ingreso de stock', run: () => registrarIngreso() },
-    { id: 'nav-stock', group: 'Ir a', icon: 'stock', label: 'Stock', run: () => Router.go('stock') },
-    { id: 'nav-inicio', group: 'Ir a', icon: 'home', label: 'Hoy', run: () => Router.go('inicio') },
-    { id: 'nav-registro', group: 'Ir a', icon: 'list', label: 'Registro', run: () => Router.go('registro') },
-    { id: 'nav-sustancias', group: 'Ir a', icon: 'pill', label: 'Sustancias', run: () => Router.go('sustancias') },
-    { id: 'nav-graficos', group: 'Ir a', icon: 'chart', label: 'Gráficos', run: () => Router.go('graficos') },
-    { id: 'nav-piezas', group: 'Ir a', icon: 'layers', label: 'Piezas', run: () => Router.go('piezas') },
-    { id: 'nav-ajustes', group: 'Ir a', icon: 'settings', label: 'Ajustes', run: () => Router.go('ajustes') },
-    ...S.sustancias.map((s) => ({
-      id: `abrir-${s.id}`, group: 'Sustancias', icon: 'curva', label: s.nombre, hint: 'perfil',
-      run: () => Router.go('sustancia', s.id),
-    })),
-  ]);
-}
-
 /* ══ Color de la ventana ═════════════════════════════════════════════════════
    --ox-bg está en oklch y Electron solo entiende hex. La traducción la hace
    colorToken() con un canvas, no un regex: parseando el texto, la app le
@@ -222,7 +192,6 @@ function sincronizarColor() {
 async function boot() {
   Icons.mount(document);
   Tooltip.init();
-  Palette.init({ placeholder: 'Buscar comandos, sustancias, tomas…' });
   initClickFlash();
   initScrollFades();
   setStateLabels({ running: 'En curso', done: 'Cerrado', idle: 'Sin cerrar' });
@@ -238,9 +207,8 @@ async function boot() {
     return;
   }
 
-  registrarComandos();
   pintarChrome();
-  Router.onChange(() => { registrarComandos(); pintarChrome(); });
+  Router.onChange(() => pintarChrome());
   Router.go('inicio');
 
   // El splash se va recién cuando ya hay algo pintado debajo.
