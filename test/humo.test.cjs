@@ -175,7 +175,7 @@ app.whenReady().then(async () => {
   ok('la duración aparece en la cabecera', (await texto('.ap-cardchart .ox-card__head')).includes('duró 5 h'));
 
   console.log('\n5. Todas las vistas montan');
-  for (const v of ['registro', 'sustancias', 'stock', 'graficos', 'piezas', 'ajustes', 'inicio']) {
+  for (const v of ['registro', 'sustancias', 'stock', 'reservas', 'graficos', 'piezas', 'ajustes', 'inicio']) {
     await click(`[data-view="${v}"]`);
     await sleep(700);
     const hijos = await js(`document.getElementById('view').children.length`);
@@ -503,6 +503,72 @@ app.whenReady().then(async () => {
   await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
   ok('con dos cargas, el diálogo de toma pregunta de cuál sale', await existe('#f-carga'));
   await click('[data-dismiss]'); await sleep(400);
+
+  console.log('\n19. Reservas');
+  const armo = await js(`window.__apex.S.sustancias.find((s) => s.nombre === 'Armodafinilo').id`);
+  const cifra150 = async () => { await click('[data-view="stock"]'); await sleep(700); return texto(`[data-stock="${armo}|150|mg"] .ap-stock__cifra b`); };
+  const reservasEnDisco = () => js(`window.onyx.col('reservas').list()`);
+  await click('[data-view="reservas"]'); await sleep(700);
+  ok('la vista monta y queda activa en el rail', await existe('[data-view="reservas"].is-active'));
+  ok('sin reservas, ofrece la primera', await existe('.ox-empty [data-action="nueva-reserva"]'));
+  await click('.ox-empty [data-action="nueva-reserva"]'); await sleep(600);
+  ok('el diálogo de reserva abre, con «para quién»', await existe('.ox-modal #f-para'));
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  await escribir('#f-carga', '150');
+  await escribir('#f-upe', '30');
+  await escribir('#f-env', '3');
+  await escribir('#f-para', 'Papá');
+  ok('el total dice que se reservan', (await texto('#f-total')).includes('Se reservan 90 comprimidos'), await texto('#f-total'));
+  await primario();
+  let res = await reservasEnDisco();
+  ok('la reserva quedó en disco, en su colección', res.length === 1 && res[0].para === 'Papá' && res[0].envases === 3 && res[0].salidas.length === 0, JSON.stringify(res));
+  ok('muestra una tarjeta con 90, para Papá', (await texto('.ap-reserva .ap-stock__cifra b')) === '90' && (await texto('.ap-reserva__para')).includes('Papá'));
+  ok('el rail cuenta la reserva', (await texto('#cuenta-reservas')) === '1');
+  ok('y el stock no la ve: el de 150 sigue en 58', (await cifra150()) === '58');
+
+  await click('#btn-registrar'); await sleep(600);
+  await tap('#f-sust'); await sleep(300); await menuItem('Armodafinilo');
+  await escribir('#f-cant', '150');
+  await escribir('#f-momento-hora', '2359');
+  await primario();
+  ok('una toma descuenta del stock', (await cifra150()) === '57');
+  await click('[data-view="reservas"]'); await sleep(700);
+  ok('y a la reserva no la toca', (await texto('.ap-reserva .ap-stock__cifra b')) === '90');
+
+  await click(`[data-action="pasar-stock"][data-arg="${res[0].id}"]`); await sleep(600);
+  ok('pasar al stock propone todo lo que queda', (await js(`document.querySelector('#f-unid').value`)) === '90');
+  await escribir('#f-unid', '120');
+  ok('no deja sacar más de lo que hay', (await primarioApagado()) === true && (await texto('#f-total')).includes('quedan 90'));
+  await escribir('#f-unid', '30');
+  await escribir('#f-momento-hora', '2359');
+  ok('cuenta los envases y lo que queda', (await texto('#f-total')).includes('30 comprimidos (1 envase)') && (await texto('#f-total')).includes('quedan 60'), await texto('#f-total'));
+  await primario();
+  const deReserva = (await js(`window.onyx.col('ingresos').list()`)).filter((i) => i.reservaId === res[0].id);
+  ok('se creó un ingreso atado a la reserva', deReserva.length === 1 && deReserva[0].carga === 150 && deReserva[0].unidadesPorEnvase * deReserva[0].envases === 30, JSON.stringify(deReserva));
+  ok('a la reserva le quedan 60', (await texto('.ap-reserva .ap-stock__cifra b')) === '60');
+  ok('y el stock de 150 subió 30', (await cifra150()) === '87');
+
+  await click('[data-view="reservas"]'); await sleep(700);
+  await click(`[data-action="entregar-reserva"][data-arg="${res[0].id}"]`); await sleep(600);
+  ok('entregar propone el destino de la reserva', (await js(`document.querySelector('#f-dest').value`)) === 'Papá');
+  await primario();
+  res = await reservasEnDisco();
+  const entrega = res[0].salidas.find((x) => x.tipo === 'entrega');
+  ok('la entrega quedó registrada, con todo lo que quedaba', entrega?.unidades === 60 && entrega?.destino === 'Papá', JSON.stringify(res[0].salidas));
+  ok('la reserva se cerró: no quedan tarjetas', (await cuenta('.ap-reserva')) === 0 && await existe('.ap-reservas__vacio'));
+  ok('el rail ya no la cuenta', (await texto('#cuenta-reservas')) === '0');
+  ok('la entrega no toca el stock', (await cifra150()) === '87');
+  await click('[data-view="reservas"]'); await sleep(700);
+  ok('los movimientos: reservada, al stock y entregada', (await cuenta('#view .ox-table tbody tr')) === 3);
+
+  const menuDe = (mov) => js(`(() => { const tr = [...document.querySelectorAll('#view .ox-table tbody tr')].find((t) => t.textContent.includes(${JSON.stringify(mov)}));
+    const b = tr?.querySelector('[data-menu]'); if (!b) return false; b.click(); return true; })()`);
+  await menuDe('Al stock'); await sleep(300);
+  await menuItem('Devolver a la reserva…');
+  await primario();
+  ok('devolver a la reserva borra su ingreso', !(await js(`window.onyx.col('ingresos').list()`)).some((i) => i.reservaId === res[0].id));
+  ok('y las 30 vuelven a la reserva', (await texto('.ap-reserva .ap-stock__cifra b')) === '30' && (await texto('#cuenta-reservas')) === '1');
+  ok('el stock de 150 vuelve a 57', (await cifra150()) === '57');
 
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');

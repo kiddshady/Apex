@@ -461,6 +461,48 @@ export function stocks(ingresos, dosis) {
     .sort((a, b) => a.sustanciaId.localeCompare(b.sustanciaId) || a.carga - b.carga);
 }
 
+/* ── Reservas ────────────────────────────────────────────────────────────────
+   Una reserva es un ingreso que NO se toca: no es stock, las tomas no la
+   descuentan nunca, y `stocks()` ni la ve (vive en su propia colección). Sale
+   de ahí solo de dos maneras, cada una registrada como una salida:
+
+     stock    → pasa al stock: se crea un ingreso con esas unidades, con fecha
+                de la salida, y desde entonces las tomas lo descuentan.
+     entrega  → se va de casa (a quien era, o donado). No vuelve a ningún lado.
+
+   Las salidas pueden ser parciales: de tres cajas guardadas, una al stock y
+   dos a quien eran. Lo que queda es lo reservado menos lo que salió. */
+
+export const TIPOS_SALIDA = ['stock', 'entrega'];
+
+/**
+ * El estado de una reserva: lo reservado, lo que salió por cada lado y lo que
+ * queda. Las salidas vuelven ordenadas de la más vieja a la más nueva.
+ */
+export function estadoReserva(r) {
+  const total = unidadesIngreso(r);
+  const salidas = [...(r?.salidas || [])]
+    .filter((x) => TIPOS_SALIDA.includes(x.tipo) && Number(x.unidades) > 0)
+    .sort((a, b) => (a.at || 0) - (b.at || 0));
+  const suma = (tipo) => salidas.filter((x) => x.tipo === tipo).reduce((n, x) => n + Number(x.unidades), 0);
+  const aStock = suma('stock');
+  const entregadas = suma('entrega');
+  return { total, aStock, entregadas, restantes: total - aStock - entregadas, salidas };
+}
+
+/**
+ * Cómo se reparten `unidades` en un ingreso: en envases enteros si cierran
+ * justo con los de la reserva (60 de cajas de 30 son dos cajas), y si no,
+ * como un envase suelto con esas unidades.
+ */
+export function envasesPara(unidades, unidadesPorEnvase) {
+  const u = Number(unidades); const upe = Number(unidadesPorEnvase);
+  const n = u / upe;
+  return upe > 0 && Math.abs(n - Math.round(n)) < 1e-9 && n >= 1
+    ? { unidadesPorEnvase: upe, envases: Math.round(n) }
+    : { unidadesPorEnvase: u, envases: 1 };
+}
+
 /** La dosis diaria que dice el esquema fijo (tomas × habitual), o null. */
 export function dosisDiariaEsquema(s) {
   const e = normalizarEsquema(s?.esquema);

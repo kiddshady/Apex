@@ -113,6 +113,26 @@ async function sembrar() {
   await ingresar('i-0003', 20, 's-0005', 'Nocte', 10, 30, 1);
   await ingresar('i-0004', 6, 's-0004', 'Lamictal', 200, 30, 2);
 
+  /* Reservas: una de papá intacta, una con una caja ya entregada, y una que
+     pasó en parte al stock (con su ingreso atado). */
+  const reservas = store.collection('reservas');
+  const reservar = (id, dias, sustanciaId, marca, carga, u, env, para, notas = '', salidas = []) => reservas.save({
+    id, sustanciaId, marca, presentacion: 'Comprimidos', carga, unidad: 'mg', unidadesPorEnvase: u, envases: env,
+    at: hoy0 - dias * DIA + 18 * HORA, para, notas, salidas, createdAt: ahora, updatedAt: ahora,
+  });
+  await reservar('r-0001', 9, 's-0004', 'Lamictal', 100, 30, 3, 'Papá', 'Vence 03/2027. Se la llevo el domingo.');
+  await reservar('r-0002', 25, 's-0005', 'Nocte', 10, 20, 3, 'Papá', '', [
+    { id: 'x-1', tipo: 'entrega', at: hoy0 - 11 * DIA + 12 * HORA, unidades: 20, destino: 'Papá', notas: '' },
+  ]);
+  await reservar('r-0003', 30, 's-0001', 'Vigicer', 200, 30, 2, '', 'Para cuando se termine lo abierto.', [
+    { id: 'x-2', tipo: 'stock', at: hoy0 - 3 * DIA + 10 * HORA, unidades: 30, ingresoId: 'i-0005' },
+  ]);
+  await ingresos.save({
+    id: 'i-0005', sustanciaId: 's-0001', marca: 'Vigicer', presentacion: 'Comprimidos', carga: 200, unidad: 'mg',
+    unidadesPorEnvase: 30, envases: 1, at: hoy0 - 3 * DIA + 10 * HORA, notas: 'Desde la reserva.', reservaId: 'r-0003',
+    createdAt: ahora, updatedAt: ahora,
+  });
+
   /* Hoy: un episodio en curso, con onset y pico pero sin fin. */
   const at = ahora - 3 * HORA - 12 * MIN;
   await guardar({
@@ -210,6 +230,18 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('[data-action="registrar-ingreso"]').click(); true`);
   await sleep(700);
   await foto('17-dialogo-ingreso');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await ir('reservas');
+  await foto('18-reservas');
+  await js(`document.querySelector('[data-action="nueva-reserva"]').click(); true`);
+  await sleep(700);
+  await foto('19-dialogo-reserva');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await js(`document.querySelector('[data-action="entregar-reserva"]').click(); true`);
+  await sleep(700);
+  await foto('20-dialogo-entregar');
   await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
   await sleep(400);
 

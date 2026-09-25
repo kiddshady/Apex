@@ -106,6 +106,38 @@ calculadora de hasta cuándo alcanza: dosificación por día → unidades por d�
 días y fecha, **siempre contados desde hoy**. Debajo, la misma cuenta con el
 esquema fijo y con el ritmo real de los últimos 30 días.
 
+### Las reservas
+
+Cuarta colección: **reservas**, lo que se guarda aparte y no se toca —los
+remedios de otra persona, lo apartado para más adelante—. Tiene la forma de un
+ingreso, más para quién es y sus salidas:
+
+```json
+{ "id": "r-0001", "sustanciaId": "s-0004", "marca": "Lamictal", "presentacion": "Comprimidos",
+  "carga": 100, "unidad": "mg", "unidadesPorEnvase": 30, "envases": 3, "at": 1789000000000,
+  "para": "Papá", "notas": "Vence 03/2027.",
+  "salidas": [
+    { "id": "x…", "tipo": "stock",   "at": 1789500000000, "unidades": 30, "ingresoId": "i-0012" },
+    { "id": "x…", "tipo": "entrega", "at": 1789600000000, "unidades": 30, "destino": "Papá", "notas": "" }
+  ] }
+```
+
+Una reserva **no es stock**: vive en otra colección, así que `stocks()` ni la
+ve y ninguna toma la descuenta, ni antes ni después de su fecha. Sale solo a
+mano, de dos maneras, y puede salir de a partes:
+
+- **Pasar al stock** crea un ingreso con esas unidades (con `reservaId`), con
+  la fecha de la salida: desde ahí las tomas lo descuentan. Si las unidades
+  cierran en envases enteros se guardan como envases; si no, como uno suelto.
+- **Entregar** la saca de casa, con a quién. No vuelve a ningún lado.
+
+Cada salida se deshace desde la tabla de movimientos, y las unidades vuelven a
+la reserva; la que fue al stock borra además su ingreso. Borrar ese ingreso
+desde Stock hace lo mismo, y editarlo corrige la salida: la cuenta de la
+reserva y la del stock siempre cierran. El diálogo de reserva acepta
+sustancias archivadas: lo de otro se archiva para que no ande por Hoy, y se
+reserva igual.
+
 ### Los hitos
 
 Son los checkpoints del episodio, el «14:00 tomo → 15:00 onset → 17:00 va
@@ -155,6 +187,7 @@ Todo en hora local: una toma a las 23:30 es de ese día.
 | **Registro** | todas las tomas por día, con rango (7d · 30d · 90d · 1a · todo) y filtro de sustancia |
 | **Dosis** | la línea de tiempo del episodio, la curva de intensidad, el inspector con las notas |
 | **Sustancias** | la lista, y por cada una el perfil, las curvas superpuestas y la tabla de episodios |
+| **Reservas** | lo guardado aparte, con pasar al stock y entregar a mano en cada tarjeta, y la tabla de movimientos |
 | **Gráficos** | dosis por día en línea, mapa de calor calendario o semana × hora, con su tabla gemela |
 | **Ajustes** | rango inicial, unidad por defecto, la carpeta de datos, exportar a CSV y JSON |
 

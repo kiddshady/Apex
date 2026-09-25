@@ -17,7 +17,8 @@ import { designHTML, wireDesign } from './design-view.js';
 import { S, api, cargarTodo, pintarChrome, dosis as tomarDosis, sustancia, setContexto } from './tienda.js';
 import {
   dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, dialogoIngreso,
-  menuDosis, menuSustancia, menuIngreso, confirmarBorrarDosis,
+  dialogoReserva, dialogoSalida,
+  menuDosis, menuSustancia, menuIngreso, menuReserva, menuSalida, confirmarBorrarDosis,
 } from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
 
@@ -27,6 +28,7 @@ import { vistaDosis } from './vistas/dosis.js';
 import { vistaSustancias, vistaSustancia } from './vistas/sustancias.js';
 import { vistaGraficos } from './vistas/graficos.js';
 import { vistaStock } from './vistas/stock.js';
+import { vistaReservas } from './vistas/reservas.js';
 import { vistaAjustes } from './vistas/ajustes.js';
 import { viewEl, head } from './ui.js';
 
@@ -56,6 +58,7 @@ Router.define({
   sustancias: { view: vistaSustancias },
   sustancia: { view: vistaSustancia, nav: 'sustancias' },
   stock: { view: vistaStock },
+  reservas: { view: vistaReservas },
   graficos: { view: vistaGraficos },
   piezas: { view: vistaPiezas },
   ajustes: { view: vistaAjustes },
@@ -82,6 +85,14 @@ async function nuevaCombinacion() {
 
 async function registrarIngreso(sustanciaId = null) {
   if (await dialogoIngreso({ sustanciaId })) Router.name === 'stock' ? Router.refresh() : Router.go('stock');
+}
+
+async function nuevaReserva(sustanciaId = null) {
+  if (await dialogoReserva({ sustanciaId })) Router.name === 'reservas' ? Router.refresh() : Router.go('reservas');
+}
+
+async function salidaReserva(id, tipo) {
+  if (await dialogoSalida(id, tipo)) Router.refresh();
 }
 
 async function agregarHito(id) {
@@ -120,13 +131,8 @@ function cablearShell() {
     if (trigger) {
       e.stopPropagation();
       const arg = trigger.dataset.menuArg;
-      const items = trigger.dataset.menu === 'dosis'
-        ? menuDosis(arg, { despues: () => Router.refresh() })
-        : trigger.dataset.menu === 'sustancia'
-          ? menuSustancia(arg, { despues: () => Router.refresh() })
-          : trigger.dataset.menu === 'ingreso'
-            ? menuIngreso(arg, { despues: () => Router.refresh() })
-            : null;
+      const menus = { dosis: menuDosis, sustancia: menuSustancia, ingreso: menuIngreso, reserva: menuReserva, salida: menuSalida };
+      const items = menus[trigger.dataset.menu]?.(arg, { despues: () => Router.refresh() }) || null;
       if (items) Menu.show(trigger, items, { align: 'end' });
       return;
     }
@@ -150,6 +156,9 @@ function cablearShell() {
       else if (a === 'nueva-sustancia') nuevaSustancia();
       else if (a === 'nueva-combinacion') nuevaCombinacion();
       else if (a === 'registrar-ingreso') registrarIngreso(act.dataset.arg || null);
+      else if (a === 'nueva-reserva') nuevaReserva(act.dataset.arg || null);
+      else if (a === 'pasar-stock') salidaReserva(act.dataset.arg, 'stock');
+      else if (a === 'entregar-reserva') salidaReserva(act.dataset.arg, 'entrega');
       else if (a === 'eliminar-dosis') {
         confirmarBorrarDosis(act.dataset.arg).then((ok) => {
           if (!ok) return;

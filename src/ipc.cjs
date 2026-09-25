@@ -22,8 +22,10 @@ const store = require('./store.cjs');
 
      sustancias  → lo que se toma: nombre, unidad, dosis habitual, vía.
      dosis       → cada toma, con sus hitos (onset, pico, fin…) adentro.
-     ingresos    → cada compra o entrega: cuántas unidades de qué carga. */
-const COLLECTIONS = ['sustancias', 'dosis', 'ingresos'];
+     ingresos    → cada compra o entrega: cuántas unidades de qué carga.
+     reservas    → lo guardado aparte que no se toca: no es stock hasta que
+                   pasa a serlo, o sale entregado. */
+const COLLECTIONS = ['sustancias', 'dosis', 'ingresos', 'reservas'];
 
 function coll(name) {
   if (!COLLECTIONS.includes(name)) throw new Error(`colección no permitida: ${name}`);
@@ -154,10 +156,10 @@ function register({ onAjustes } = {}) {
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (res.canceled || !res.filePath) return { cancelado: true };
-    const [sustancias, dosis, ingresos, ajustes] = await Promise.all([
-      coll('sustancias').list(), coll('dosis').list(), coll('ingresos').list(), store.loadSettings(),
+    const [sustancias, dosis, ingresos, reservas, ajustes] = await Promise.all([
+      coll('sustancias').list(), coll('dosis').list(), coll('ingresos').list(), coll('reservas').list(), store.loadSettings(),
     ]);
-    const todo = { app: 'apex', exportado: new Date().toISOString(), ajustes, sustancias, dosis, ingresos };
+    const todo = { app: 'apex', exportado: new Date().toISOString(), ajustes, sustancias, dosis, ingresos, reservas };
     await fsp.writeFile(res.filePath, JSON.stringify(todo, null, 2), 'utf8');
     return { cancelado: false, ruta: res.filePath };
   });

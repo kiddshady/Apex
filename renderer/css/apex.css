@@ -119,6 +119,31 @@
 .ap-calc__linea--main { font-size: var(--ox-fs-14, 14px); color: var(--ox-text); }
 .ap-calc__linea--meta { color: var(--ox-text-3); margin-top: 4px; }
 
+/* ── Reservas ────────────────────────────────────────────────────────────────
+   La misma tarjeta que un stock, pero no se elige: no hay calculadora que
+   mandarle. Sus acciones van al pie, a la vista, porque son las dos únicas
+   maneras de que algo salga de ahí. */
+.ap-reserva { cursor: default; }
+.ap-reserva:hover { background: var(--ox-s2); }
+.ap-reserva .ap-stock__nombre,
+.ap-reserva__para,
+.ap-reserva__notas { user-select: text; }
+.ap-reserva__para {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: var(--ox-fs-12); color: var(--ox-text-2);
+}
+.ap-reserva__para .ox-icon { width: 12px; height: 12px; flex: none; color: var(--ox-text-3); }
+.ap-reserva__para b { color: var(--ox-text); font-weight: var(--ox-w-medium); }
+.ap-reserva__notas { white-space: pre-line; }
+.ap-reserva__acciones { display: flex; align-items: center; gap: var(--ox-2); margin-top: auto; padding-top: var(--ox-2); }
+.ap-reservas__aviso { margin-bottom: var(--ox-4); }
+.ap-reservas__aviso b { color: var(--ox-text); font-weight: var(--ox-w-medium); }
+.ap-reservas__vacio { margin-bottom: var(--ox-5); }
+
+/* El tipo de movimiento en la tabla: ícono + palabra, sin color. */
+.ap-mov { display: inline-flex; align-items: center; gap: 6px; }
+.ap-mov .ox-icon { width: 12px; height: 12px; color: var(--ox-text-3); }
+
 /* El «sale del stock de» del diálogo de toma, debajo de la cantidad. */
 .ap-carga { gap: 10px; margin-top: var(--ox-2); animation: ox-glide-in var(--ox-t-2) var(--ox-ease) both; }
 .ap-carga .ox-meta { white-space: nowrap; }

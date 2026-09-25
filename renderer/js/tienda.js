@@ -14,7 +14,7 @@
 
 import { relTime, fmtDosis, fmtQty } from './format.js';
 import { esc, path as rutaHTML } from './ui.js';
-import { estadoDosis, esCombinacion, normalizarEsquema, stocks } from './pk.js';
+import { estadoDosis, esCombinacion, normalizarEsquema, stocks, estadoReserva } from './pk.js';
 
 export const api = window.onyx;
 export const apex = window.apex;
@@ -22,6 +22,7 @@ export const apex = window.apex;
 const colSustancias = api.col('sustancias');
 const colDosis = api.col('dosis');
 const colIngresos = api.col('ingresos');
+const colReservas = api.col('reservas');
 
 export const S = {
   info: null,
@@ -29,6 +30,7 @@ export const S = {
   sustancias: [],
   dosis: [],           // siempre de la más reciente a la más vieja
   ingresos: [],        // idem
+  reservas: [],        // idem, por la fecha en que se guardaron
   ultimoGuardado: null,
 };
 
@@ -36,10 +38,11 @@ const porFechaDesc = (a, b) => (b.at || 0) - (a.at || 0);
 const porNombre = (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
 
 export async function cargarTodo() {
-  const [info, ajustes, sustancias, dosis, ingresos] = await Promise.all([
-    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(), colIngresos.list(),
+  const [info, ajustes, sustancias, dosis, ingresos, reservas] = await Promise.all([
+    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(), colIngresos.list(), colReservas.list(),
   ]);
   S.ingresos = ingresos.sort(porFechaDesc);
+  S.reservas = reservas.sort(porFechaDesc);
   S.info = info;
   S.ajustes = ajustes;
   S.sustancias = sustancias.sort(porNombre);
@@ -89,6 +92,12 @@ export function textoEsquema(s) {
 /** Los stocks de ahora, calculados sobre el espejo. */
 export const stocksActuales = () => stocks(S.ingresos, S.dosis);
 export const ingreso = (id) => S.ingresos.find((i) => i.id === id) || null;
+
+export const reserva = (id) => S.reservas.find((r) => r.id === id) || null;
+/** Las reservas a las que todavía les queda algo, cada una con su estado. */
+export const reservasVigentes = () => S.reservas
+  .map((r) => ({ r, e: estadoReserva(r) }))
+  .filter(({ e }) => e.restantes > 1e-9);
 
 /** Las combinaciones que llevan a esta sustancia adentro. */
 export const combinacionesCon = (id) => S.sustancias.filter((s) => esCombinacion(s) && s.componentes.some((c) => c.sustanciaId === id));
@@ -158,6 +167,22 @@ export async function borrarIngreso(id) {
   tocar();
 }
 
+export async function guardarReserva(r) {
+  const ahora = Date.now();
+  const item = { ...r, salidas: r.salidas || [], createdAt: r.createdAt || ahora, updatedAt: ahora };
+  if (!item.id) item.id = await colReservas.nextId('r');
+  await colReservas.save(item);
+  S.reservas = [...S.reservas.filter((x) => x.id !== item.id), item].sort(porFechaDesc);
+  tocar();
+  return item;
+}
+
+export async function borrarReserva(id) {
+  await colReservas.remove(id);
+  S.reservas = S.reservas.filter((x) => x.id !== id);
+  tocar();
+}
+
 export async function guardarAjustes(patch) {
   S.ajustes = await api.settings.save(patch);
   tocar();
@@ -175,6 +200,7 @@ export function pintarChrome() {
   set('cuenta-dosis', S.dosis.length);
   set('cuenta-sustancias', activas().length);
   set('cuenta-stock', stocksActuales().filter((p) => p.restantes > 0).length);
+  set('cuenta-reservas', reservasVigentes().length);
   set('stat-dosis', S.dosis.length);
 
   const ult = S.dosis[0];

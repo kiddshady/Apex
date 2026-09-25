@@ -21,13 +21,14 @@ import { fmtDosis, fmtHM, fmtOffset, fmtQty, fmtDiaSemana, plural } from './form
 import { campoMomento, cablearMomento } from './campo-fecha.js';
 import {
   FASES, faseInfo, ordenarHitos, MODOS_ESQUEMA, MAX_COMPONENTES,
-  esCombinacion, normalizarEsquema, esquemaDelDia,
+  esCombinacion, normalizarEsquema, esquemaDelDia, estadoReserva, envasesPara,
 } from './pk.js';
 import { UNIDADES, VIAS, PRESENTACIONES, pasoPara } from './vocab.js';
 import {
   S, sustancia, dosis as tomarDosis, dosisDe, activas, etiquetaDosis, combinacionesCon, textoEsquema,
   guardarSustancia, guardarDosis, borrarDosis, borrarSustancia, guardarAjustes,
   stocksActuales, ingreso as tomarIngreso, guardarIngreso, borrarIngreso, nombreSustancia,
+  reserva as tomarReserva, guardarReserva, borrarReserva,
 } from './tienda.js';
 import { segmentedHTML } from './vistas/comunes.js';
 
@@ -774,15 +775,23 @@ export async function borrarHito(d, hitoId) {
  * Un ingreso: cuántos envases de qué presentación entraron, y cuándo. Al
  * elegir la droga propone lo del último ingreso de esa droga —marca,
  * presentación, carga, unidades por envase—, que es lo que se repite.
+ *
+ * Con `reserva` es el mismo formulario para guardar algo aparte, más «para
+ * quién». Ahí entran también las sustancias archivadas: lo de otro (los
+ * remedios de papá) se archiva para que no ande por Hoy, y se reserva igual.
  */
-export async function dialogoIngreso({ existente = null, sustanciaId = null } = {}) {
+export async function dialogoIngreso({ existente = null, sustanciaId = null, reserva = false } = {}) {
   const usadas = new Set(existente ? [existente.sustanciaId] : []);
-  const opciones = S.sustancias.filter((s) => !esCombinacion(s) && (!s.archivada || usadas.has(s.id)));
+  const opciones = S.sustancias.filter((s) => !esCombinacion(s) && (reserva || !s.archivada || usadas.has(s.id)));
   if (!opciones.length) {
-    Toast.show({ title: 'Primero, una sustancia', text: 'Un ingreso dice de qué droga es: creala en Sustancias.', icon: 'pill' });
+    Toast.show({ title: 'Primero, una sustancia', text: `${reserva ? 'Una reserva' : 'Un ingreso'} dice de qué droga es: creala en Sustancias.`, icon: 'pill' });
     return null;
   }
-  const ultimoDe = (id) => S.ingresos.find((i) => i.sustanciaId === id) || null;
+  const ultimoDe = (id) => (reserva ? S.reservas.find((r) => r.sustanciaId === id) : null)
+    || S.ingresos.find((i) => i.sustanciaId === id) || null;
+  // Lo que ya salió de una reserva que se edita: por debajo de eso no puede quedar.
+  const salidas = reserva && existente ? estadoReserva(existente).salidas : [];
+  const salido = salidas.reduce((n, x) => n + Number(x.unidades), 0);
   const id0 = existente?.sustanciaId || (sustancia(sustanciaId) && !esCombinacion(sustancia(sustanciaId)) ? sustanciaId : null) || opciones[0].id;
   const base = existente || ultimoDe(id0) || {};
   const s0 = sustancia(id0);
@@ -825,21 +834,29 @@ export async function dialogoIngreso({ existente = null, sustanciaId = null } = 
       </div>
     </div>
     <div class="ap-aviso ap-aviso--total" id="f-total"></div>
-    ${campoMomento({ id: 'f-momento', label: 'Cuándo entró', ms: existente?.at ?? Date.now() })}
-    <span class="ox-field__hint" style="margin-top:-10px">Las tomas descuentan desde este momento; las anteriores no.</span>
+    ${campoMomento({ id: 'f-momento', label: reserva ? 'Cuándo se guardó' : 'Cuándo entró', ms: existente?.at ?? Date.now() })}
+    <span class="ox-field__hint" style="margin-top:-10px">${reserva
+      ? 'Queda aparte: ninguna toma la descuenta, ni antes ni después de esta fecha.'
+      : 'Las tomas descuentan desde este momento; las anteriores no.'}</span>
+    ${reserva ? `<div class="ox-field">
+      <label class="ox-field__label" for="f-para">Para quién</label>
+      <input class="ox-input" id="f-para" placeholder="Papá — o vacío, si es para más adelante" spellcheck="false" autocomplete="off" value="${esc(existente?.para || '')}">
+    </div>` : ''}
     <div class="ox-field">
       <label class="ox-field__label" for="f-notas">Notas</label>
       <textarea class="ox-textarea" id="f-notas" rows="2" placeholder="Farmacia, receta, lote, vencimiento…">${esc(existente?.notas || '')}</textarea>
     </div>`;
 
   const p = Modal.show({
-    title: existente ? 'Editar ingreso' : 'Registrar ingreso',
-    sub: existente ? '' : 'Lo que entra al stock. La misma droga con la misma dosis por unidad se suma, sea de la marca que sea.',
+    title: reserva ? (existente ? 'Editar reserva' : 'Nueva reserva') : (existente ? 'Editar ingreso' : 'Registrar ingreso'),
+    sub: existente ? '' : reserva
+      ? 'Lo que se guarda aparte y no se toca. No es stock: sale solo cuando lo pases al stock o lo entregues.'
+      : 'Lo que entra al stock. La misma droga con la misma dosis por unidad se suma, sea de la marca que sea.',
     body,
     width: 580,
     actions: [
       { label: 'Cancelar', value: null },
-      { label: existente ? 'Guardar' : 'Registrar', value: true, variant: 'primary' },
+      { label: existente ? 'Guardar' : reserva ? 'Reservar' : 'Registrar', value: true, variant: 'primary' },
     ],
   });
   const primario = primarioDe();
@@ -872,10 +889,19 @@ export async function dialogoIngreso({ existente = null, sustanciaId = null } = 
   const validar = () => {
     const s = sustancia(selS.valor);
     const c = numero(carga.value); const u = numero(upe.value); const e = numero(env.value);
-    const ok = !!s && c > 0 && u > 0 && e > 0 && momento.leer() != null;
-    total.innerHTML = ok
-      ? `${Icons.svg('stock')}<div>Entran <b>${esc(fmtQty(u * e))} ${esc(selP.valor.toLowerCase())}</b> de ${esc(fmtDosis(c, s.unidad))} de ${esc(s.nombre)}.</div>`
-      : `${Icons.svg('stock')}<div>Completá la dosis por unidad, las unidades y los envases.</div>`;
+    const at = momento.leer();
+    const completo = !!s && c > 0 && u > 0 && e > 0 && at != null;
+    const corta = completo && u * e < salido - 1e-9;
+    const tarde = completo && salidas.length > 0 && at > salidas[0].at;
+    const ok = completo && !corta && !tarde;
+    const icono = Icons.svg(reserva ? 'lock' : 'stock');
+    total.innerHTML = corta
+      ? `${icono}<div>Ya salieron <b>${esc(fmtQty(salido))}</b> de esta reserva: no puede quedar en menos.</div>`
+      : tarde
+        ? `${icono}<div>La primera salida fue el ${esc(fmtDiaSemana(salidas[0].at))}: la reserva no puede ser posterior.</div>`
+        : ok
+          ? `${icono}<div>${reserva ? 'Se reservan' : 'Entran'} <b>${esc(fmtQty(u * e))} ${esc(selP.valor.toLowerCase())}</b> de ${esc(fmtDosis(c, s.unidad))} de ${esc(s.nombre)}.</div>`
+          : `${icono}<div>Completá la dosis por unidad, las unidades y los envases.</div>`;
     if (primario) primario.disabled = !ok;
   };
   validar();
@@ -897,7 +923,23 @@ export async function dialogoIngreso({ existente = null, sustanciaId = null } = 
     at: momento.leer(),
     notas: body.querySelector('#f-notas').value.trim(),
   };
-  const saved = await attempt(() => guardarIngreso(item), { errorTitle: 'No se pudo guardar el ingreso' });
+  if (reserva) {
+    item.para = body.querySelector('#f-para').value.trim();
+    const saved = await attempt(() => guardarReserva(item), { errorTitle: 'No se pudo guardar la reserva' });
+    if (saved) {
+      Toast.show({
+        title: existente ? 'Reserva actualizada' : 'Reserva guardada',
+        text: `${s.nombre} ${fmtDosis(saved.carga, saved.unidad)} · ${fmtQty(saved.unidadesPorEnvase * saved.envases)} unidades${saved.para ? ` · para ${saved.para}` : ''}`,
+        icon: 'lock',
+      });
+    }
+    return saved;
+  }
+  const saved = await attempt(async () => {
+    const i = await guardarIngreso(item);
+    await sincronizarSalida(i);
+    return i;
+  }, { errorTitle: 'No se pudo guardar el ingreso' });
   if (saved) {
     Toast.show({
       title: existente ? 'Ingreso actualizado' : 'Ingreso registrado',
@@ -911,16 +953,36 @@ export async function dialogoIngreso({ existente = null, sustanciaId = null } = 
 export async function confirmarBorrarIngreso(id) {
   const i = tomarIngreso(id);
   if (!i) return false;
+  const r = i.reservaId ? tomarReserva(i.reservaId) : null;
   const ok = await Modal.confirm({
     title: '¿Eliminar este ingreso?',
-    sub: `${nombreSustancia(i.sustanciaId)} ${fmtDosis(i.carga, i.unidad)} · ${fmtQty(i.unidadesPorEnvase * i.envases)} unidades del ${fmtDiaSemana(i.at)}. El stock se recalcula sin él.`,
+    sub: `${nombreSustancia(i.sustanciaId)} ${fmtDosis(i.carga, i.unidad)} · ${fmtQty(i.unidadesPorEnvase * i.envases)} unidades del ${fmtDiaSemana(i.at)}. El stock se recalcula sin él.`
+      + (r ? ' Vino de una reserva: esas unidades vuelven a ella.' : ''),
     confirmLabel: 'Eliminar',
     danger: true,
   });
   if (!ok) return false;
-  const hecho = await attempt(async () => { await borrarIngreso(id); return true; }, { errorTitle: 'No se pudo eliminar el ingreso' });
-  if (hecho) Toast.show({ title: 'Ingreso eliminado', icon: 'trash' });
+  const hecho = await attempt(async () => {
+    await borrarIngreso(id);
+    if (r) await guardarReserva({ ...r, salidas: (r.salidas || []).filter((x) => x.ingresoId !== id) });
+    return true;
+  }, { errorTitle: 'No se pudo eliminar el ingreso' });
+  if (hecho) Toast.show({ title: r ? 'Ingreso eliminado, de vuelta en la reserva' : 'Ingreso eliminado', icon: 'trash' });
   return !!hecho;
+}
+
+/**
+ * Un ingreso que salió de una reserva y se editó: la salida de la reserva
+ * tiene que decir lo mismo que él —cuántas unidades y cuándo—, o la cuenta de
+ * la reserva y la del stock dejarían de cerrar.
+ */
+async function sincronizarSalida(i) {
+  const r = i.reservaId ? tomarReserva(i.reservaId) : null;
+  const x = r?.salidas?.find((y) => y.ingresoId === i.id);
+  if (!x) return;
+  const unidades = i.unidadesPorEnvase * i.envases;
+  if (x.unidades === unidades && x.at === i.at) return;
+  await guardarReserva({ ...r, salidas: r.salidas.map((y) => (y === x ? { ...y, unidades, at: i.at } : y)) });
 }
 
 export function menuIngreso(id, { despues } = {}) {
@@ -933,6 +995,185 @@ export function menuIngreso(id, { despues } = {}) {
     }) },
     { sep: true },
     { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(() => confirmarBorrarIngreso(id)) },
+  ];
+}
+
+/* ══ Reservas ════════════════════════════════════════════════════════════════ */
+
+export const dialogoReserva = (opts = {}) => dialogoIngreso({ ...opts, reserva: true });
+
+/**
+ * La única manera de sacar algo de una reserva. `tipo` es 'stock' (pasa a ser
+ * un ingreso, y desde ahí las tomas lo descuentan) o 'entrega' (se va de casa).
+ * Propone todo lo que queda, ahora; se puede sacar una parte.
+ */
+export async function dialogoSalida(reservaId, tipo) {
+  const r = tomarReserva(reservaId);
+  if (!r) return null;
+  const e = estadoReserva(r);
+  if (!(e.restantes > 0)) return null;
+  const s = sustancia(r.sustanciaId);
+  const nombre = s?.nombre || 'Sustancia eliminada';
+  const pres = (r.presentacion || 'unidades').toLowerCase();
+  const alStock = tipo === 'stock';
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  body.innerHTML = `
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-unid">Cuántas ${esc(pres)}</label>
+        ${stepperHTML({ id: 'f-unid', valor: e.restantes, min: 1, step: 1 })}
+        <span class="ox-field__hint">Quedan ${esc(fmtQty(e.restantes))} en la reserva.</span>
+      </div>
+      ${alStock ? '' : `<div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-dest">A quién</label>
+        <input class="ox-input" id="f-dest" placeholder="Papá, una donación…" spellcheck="false" autocomplete="off" value="${esc(r.para || '')}">
+      </div>`}
+    </div>
+    ${campoMomento({ id: 'f-momento', label: alStock ? 'Desde cuándo es stock' : 'Cuándo se entregó', ms: Date.now() })}
+    <div class="ap-aviso ap-aviso--total" id="f-total"></div>
+    ${alStock ? '' : `<div class="ox-field">
+      <label class="ox-field__label" for="f-notas">Notas</label>
+      <textarea class="ox-textarea" id="f-notas" rows="2" placeholder="A quién, dónde, por qué…"></textarea>
+    </div>`}`;
+
+  const p = Modal.show({
+    title: alStock ? 'Pasar al stock' : 'Entregar',
+    sub: `${nombre} ${fmtDosis(r.carga, r.unidad)}${r.para ? ` · reservado para ${r.para}` : ''}`,
+    body,
+    width: 520,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: alStock ? 'Pasar al stock' : 'Entregar', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const unid = body.querySelector('#f-unid');
+  const total = body.querySelector('#f-total');
+  const momento = cablearMomento(body, 'f-momento', () => validar());
+  bindStepper(unid.closest('.ox-stepper'), () => validar());
+  unid.addEventListener('input', () => validar());
+
+  const validar = () => {
+    const u = numero(unid.value);
+    const at = momento.leer();
+    const icono = Icons.svg(alStock ? 'stock' : 'send');
+    let msg;
+    let ok = false;
+    if (!(u > 0)) msg = `Poné cuántas ${esc(pres)} salen.`;
+    else if (u > e.restantes + 1e-9) msg = `En la reserva quedan <b>${esc(fmtQty(e.restantes))}</b>: no pueden salir más.`;
+    else if (at == null) msg = 'Completá la fecha y la hora.';
+    else if (at < r.at) msg = `Se reservó el ${esc(fmtDiaSemana(r.at))}: no puede salir antes.`;
+    else {
+      ok = true;
+      const env = envasesPara(u, r.unidadesPorEnvase);
+      const cajas = env.unidadesPorEnvase === Number(r.unidadesPorEnvase) ? ` (${plural(env.envases, 'envase')})` : '';
+      const queda = e.restantes - u;
+      msg = `${alStock ? 'Pasan al stock' : 'Salen'} <b>${esc(fmtQty(u))} ${esc(pres)}</b>${esc(cajas)}. `
+        + (alStock ? 'Desde ese momento las tomas las descuentan. ' : 'No vuelven a ningún lado. ')
+        + (queda > 1e-9 ? `En la reserva quedan ${esc(fmtQty(queda))}.` : 'La reserva queda cerrada.');
+    }
+    total.innerHTML = `${icono}<div>${msg}</div>`;
+    if (primario) primario.disabled = !ok;
+  };
+  validar();
+  enterEnvia(body);
+  setTimeout(() => { unid.focus(); unid.select(); }, 80);
+
+  const ok = await p;
+  if (!ok) return null;
+  const unidades = numero(unid.value);
+  const at = momento.leer();
+  const salida = { id: `x-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, tipo, at, unidades };
+
+  const saved = await attempt(async () => {
+    if (alStock) {
+      const i = await guardarIngreso({
+        sustanciaId: r.sustanciaId, marca: r.marca || '', presentacion: r.presentacion,
+        carga: r.carga, unidad: r.unidad, ...envasesPara(unidades, r.unidadesPorEnvase),
+        at, notas: `Desde la reserva${r.para ? ` para ${r.para}` : ''}.`, reservaId: r.id,
+      });
+      salida.ingresoId = i.id;
+    } else {
+      salida.destino = body.querySelector('#f-dest').value.trim();
+      salida.notas = body.querySelector('#f-notas').value.trim();
+    }
+    return guardarReserva({ ...r, salidas: [...(r.salidas || []), salida] });
+  }, { errorTitle: alStock ? 'No se pudo pasar al stock' : 'No se pudo registrar la entrega' });
+  if (saved) {
+    Toast.show({
+      title: alStock ? 'Pasó al stock' : 'Entregado',
+      text: `${nombre} ${fmtDosis(r.carga, r.unidad)} · ${fmtQty(unidades)} ${pres}${salida.destino ? ` · a ${salida.destino}` : ''}`,
+      icon: alStock ? 'stock' : 'send',
+    });
+  }
+  return saved;
+}
+
+/** Deshace una salida: las unidades vuelven a la reserva. Si fue al stock, el ingreso que creó se borra. */
+export async function confirmarDeshacerSalida(reservaId, salidaId) {
+  const r = tomarReserva(reservaId);
+  const x = r?.salidas?.find((y) => y.id === salidaId);
+  if (!x) return false;
+  const i = x.ingresoId ? tomarIngreso(x.ingresoId) : null;
+  const ok = await Modal.confirm({
+    title: x.tipo === 'stock' ? '¿Devolver a la reserva?' : '¿Deshacer la entrega?',
+    sub: `${fmtQty(x.unidades)} ${(r.presentacion || 'unidades').toLowerCase()} de ${nombreSustancia(r.sustanciaId)} ${fmtDosis(r.carga, r.unidad)} vuelven a la reserva.`
+      + (i ? ' El ingreso que había creado en el stock se borra, y el stock se recalcula sin él.' : ''),
+    confirmLabel: x.tipo === 'stock' ? 'Devolver' : 'Deshacer',
+  });
+  if (!ok) return false;
+  const hecho = await attempt(async () => {
+    if (i) await borrarIngreso(i.id);
+    await guardarReserva({ ...r, salidas: r.salidas.filter((y) => y.id !== salidaId) });
+    return true;
+  }, { errorTitle: 'No se pudo deshacer' });
+  if (hecho) Toast.show({ title: 'De vuelta en la reserva', icon: 'undo' });
+  return !!hecho;
+}
+
+export async function confirmarBorrarReserva(id) {
+  const r = tomarReserva(id);
+  if (!r) return false;
+  const e = estadoReserva(r);
+  const ok = await Modal.confirm({
+    title: '¿Eliminar esta reserva?',
+    sub: `${nombreSustancia(r.sustanciaId)} ${fmtDosis(r.carga, r.unidad)} · ${fmtQty(e.total)} unidades del ${fmtDiaSemana(r.at)}.`
+      + (e.aStock ? ` Las ${fmtQty(e.aStock)} que ya pasaron al stock se quedan en el stock.` : '')
+      + ' Esto no se puede deshacer.',
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return false;
+  const hecho = await attempt(async () => { await borrarReserva(id); return true; }, { errorTitle: 'No se pudo eliminar la reserva' });
+  if (hecho) Toast.show({ title: 'Reserva eliminada', icon: 'trash' });
+  return !!hecho;
+}
+
+export function menuReserva(id, { despues } = {}) {
+  const luego = (fn) => async () => { await fn(); despues?.(); };
+  const r = tomarReserva(id);
+  const queda = r ? estadoReserva(r).restantes > 1e-9 : false;
+  return [
+    ...(queda ? [
+      { label: 'Pasar al stock…', icon: 'stock', onSelect: luego(() => dialogoSalida(id, 'stock')) },
+      { label: 'Entregar…', icon: 'send', onSelect: luego(() => dialogoSalida(id, 'entrega')) },
+    ] : []),
+    { label: 'Editar…', icon: 'edit', onSelect: luego(async () => { const x = tomarReserva(id); if (x) await dialogoReserva({ existente: x }); }) },
+    { sep: true },
+    { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(() => confirmarBorrarReserva(id)) },
+  ];
+}
+
+/** `arg` es «reservaId|salidaId». */
+export function menuSalida(arg, { despues } = {}) {
+  const [rid, sid] = String(arg).split('|');
+  const x = tomarReserva(rid)?.salidas?.find((y) => y.id === sid);
+  return [
+    { label: x?.tipo === 'stock' ? 'Devolver a la reserva…' : 'Deshacer la entrega…', icon: 'undo',
+      onSelect: async () => { await confirmarDeshacerSalida(rid, sid); despues?.(); } },
   ];
 }
 
@@ -1034,7 +1275,10 @@ export function menuSustancia(id, { despues } = {}) {
     { label: 'Abrir', icon: 'external', onSelect: () => Router.go('sustancia', id) },
     { label: 'Registrar dosis…', icon: 'gota', onSelect: luego(() => dialogoDosis({ sustanciaId: id })) },
     { label: 'Editar…', icon: 'edit', onSelect: luego(async () => { if (s) await dialogoSustancia(s); }) },
-    ...(esCombinacion(s) ? [] : [{ label: 'Registrar ingreso de stock…', icon: 'stock', onSelect: luego(() => dialogoIngreso({ sustanciaId: id })) }]),
+    ...(esCombinacion(s) ? [] : [
+      { label: 'Registrar ingreso de stock…', icon: 'stock', onSelect: luego(() => dialogoIngreso({ sustanciaId: id })) },
+      { label: 'Reservar…', icon: 'lock', onSelect: luego(() => dialogoReserva({ sustanciaId: id })) },
+    ]),
     { label: s?.archivada ? 'Recuperar' : 'Archivar', icon: 'archivar', onSelect: luego(() => archivarSustancia(id, !s?.archivada)) },
     { sep: true },
     { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(async () => {

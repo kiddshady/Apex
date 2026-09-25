@@ -180,5 +180,23 @@ es('90 unidades a 1 por día: 90 días', [a.dias, pk.diaISO(a.hasta)], [90, '202
 es('a 2 por día con 3: un día', pk.alcanza(3, 2, t0).dias, 1);
 es('sin consumo no hay fecha', pk.alcanza(30, 0, t0), null);
 
+console.log('\nReservas');
+const reserva = {
+  ...ing('r-1', 20, 's-a', 150, 30, 3),
+  salidas: [
+    { id: 'x-2', tipo: 'entrega', at: t0 - pk.DIA, unidades: 30, destino: 'Papá' },
+    { id: 'x-1', tipo: 'stock', at: t0 - 5 * pk.DIA, unidades: 30, ingresoId: 'i-9' },
+    { id: 'x-3', tipo: 'cualquiera', at: t0, unidades: 30 },   // un tipo que no existe no cuenta
+  ],
+};
+const er = pk.estadoReserva(reserva);
+es('lo reservado, lo que salió por cada lado y lo que queda', [er.total, er.aStock, er.entregadas, er.restantes], [90, 30, 30, 30]);
+es('las salidas, de la más vieja a la más nueva', er.salidas.map((x) => x.id), ['x-1', 'x-2']);
+es('sin salidas queda todo', pk.estadoReserva(ing('r-2', 1, 's-a', 150, 30, 2)).restantes, 60);
+es('las tomas nunca descuentan una reserva: stocks() no la ve', pk.stocks([], tomas), []);
+es('60 de cajas de 30 son dos cajas', pk.envasesPara(60, 30), { unidadesPorEnvase: 30, envases: 2 });
+es('45 de cajas de 30 son un envase suelto de 45', pk.envasesPara(45, 30), { unidadesPorEnvase: 45, envases: 1 });
+es('menos de una caja, también suelto', pk.envasesPara(10, 30), { unidadesPorEnvase: 10, envases: 1 });
+
 console.log(`\n═══ ${pass} ok · ${fail} fallas ═══\n`);
 process.exit(fail ? 1 : 0);
