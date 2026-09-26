@@ -249,8 +249,10 @@
 .ap-hito__int .ox-meter { width: 110px; }
 .ap-hito__int b { font-weight: var(--ox-w-medium); color: var(--ox-text-2); font-variant-numeric: tabular-nums; }
 .ap-hito .ox-rowactions { margin-left: auto; }
+/* Con el foco, pero solo el de teclado (como .ox-listitem en surfaces.css): con
+   :focus-within, las acciones quedaban pegadas en el último hito clickeado. */
 .ap-hito:hover .ox-rowactions,
-.ap-hito:focus-within .ox-rowactions { opacity: 1; transform: none; }
+.ap-hito:has(:focus-visible) .ox-rowactions { opacity: 1; transform: none; }
 
 /* ── Campo de momento: fecha + hora + ahora ──────────────────────────────── */
 .ap-momento {
