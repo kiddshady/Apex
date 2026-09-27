@@ -180,7 +180,7 @@ app.whenReady().then(async () => {
   await ajustar({ sustanciaGraficos: 's-0001', rangoGraficos: '90d', metricaGraficos: 'total', mapaModo: 'calendario' });
   await ir('graficos');
   await foto('03-graficos');
-  await ajustar({ sustanciaGraficos: ['s-0001', 's-0002', 's-0003'] });
+  await ajustar({ sustanciaGraficos: ['s-0001', 's-0002', 's-0003', 's-0005'] });
   await js(`window.__apex.Router.refresh(); true`);
   await sleep(900);
   await foto('04-graficos-comparacion');

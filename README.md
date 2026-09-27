@@ -202,8 +202,9 @@ corre con CSP estricta y sin red, y una librería no se ve de la familia.
 Siguen las reglas del método de dataviz de la casa:
 
 - **Comparación legible.** Una sola sustancia usa el acento. En Gráficos se
-  pueden elegir hasta tres y superponer sus curvas: cian, violeta y ámbar,
-  también diferenciadas por trazo, con leyenda, hover y tabla compartidos.
+  pueden elegir hasta cuatro y superponer sus curvas: cian, violeta, ámbar y
+  verde, también diferenciadas por trazo, con leyenda, hover y tabla
+  compartidos.
   Si tienen la misma unidad se comparan por dosis o tomas; si se mezclan
   unidades (por ejemplo mg y ml), Apex cuenta tomas para no fingir una escala
   común. «Todas las sustancias» conserva la serie agregada de tomas.

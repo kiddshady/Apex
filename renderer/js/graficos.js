@@ -7,7 +7,7 @@
    hace sin pelear.
 
    Las reglas que siguen todos:
-   · Una serie usa el acento. La comparación de sustancias admite hasta tres
+   · Una serie usa el acento. La comparación de sustancias admite hasta cuatro
      colores fijos, reforzados por trazos distintos; el contexto va en gris.
    · Marcas finas: línea de 2 px, puntos de 8 px con anillo del color de la
      superficie, área al 10 %. La grilla es un hairline sólido y recesivo.

@@ -324,13 +324,14 @@ app.whenReady().then(async () => {
   const colorVentana = await js(`(async () => { const { colorToken } = await import('./js/ui.js'); return colorToken('--ox-bg'); })()`);
   ok('el color de la ventana coincide con main.cjs', colorVentana.toLowerCase() === BG_MAIN, `${colorVentana} vs ${BG_MAIN}`);
 
-  console.log('\n15. Comparar hasta tres sustancias en Gráficos');
+  console.log('\n15. Comparar hasta cuatro sustancias en Gráficos');
   const extras = await js(`(async () => {
     const T = await import('./js/tienda.js');
     const ahora = Date.now();
     const defs = [
       { nombre: 'Armodafinilo', unidad: 'mg', cantidad: 150, dias: 1 },
       { nombre: 'Cafeína', unidad: 'mg', cantidad: 80, dias: 2 },
+      { nombre: 'Teanina', unidad: 'mg', cantidad: 200, dias: 2 },
       { nombre: 'Aceite', unidad: 'ml', cantidad: 2, dias: 3 },
     ];
     const out = [];
@@ -345,23 +346,23 @@ app.whenReady().then(async () => {
     return out;
   })()`);
   await sleep(900);
-  ok('las sustancias auxiliares quedaron disponibles', extras.length === 3, JSON.stringify(extras));
+  ok('las sustancias auxiliares quedaron disponibles', extras.length === 4, JSON.stringify(extras));
 
-  for (const nombre of ['Modafinilo', 'Armodafinilo', 'Cafeína']) {
+  for (const nombre of ['Modafinilo', 'Armodafinilo', 'Cafeína', 'Teanina']) {
     await tap('#f-sust'); await sleep(250); await menuItem(nombre); await sleep(350);
   }
-  ok('el ajuste persiste tres ids', (await js(`window.onyx.settings.get().then(a => a.sustanciaGraficos)`)).length === 3);
-  ok('se dibujan tres curvas superpuestas', (await cuenta('#linea .ap-linea')) === 3);
-  ok('la leyenda identifica las tres', (await cuenta('#linea .ap-series-legend__item')) === 3
+  ok('el ajuste persiste cuatro ids', (await js(`window.onyx.settings.get().then(a => a.sustanciaGraficos)`)).length === 4);
+  ok('se dibujan cuatro curvas superpuestas', (await cuenta('#linea .ap-linea')) === 4);
+  ok('la leyenda identifica las cuatro', (await cuenta('#linea .ap-series-legend__item')) === 4
     && (await texto('#linea .ap-series-legend')).includes('Modafinilo')
-    && (await texto('#linea .ap-series-legend')).includes('Cafeína'));
+    && (await texto('#linea .ap-series-legend')).includes('Teanina'));
   const trazos = await js(`[...document.querySelectorAll('#linea .ap-linea')].map(p => ({ stroke: getComputedStyle(p).stroke, dash: getComputedStyle(p).strokeDasharray }))`);
-  ok('color y trazo distinguen cada curva', new Set(trazos.map((x) => x.stroke)).size === 3
-    && new Set(trazos.map((x) => x.dash)).size === 3, JSON.stringify(trazos));
+  ok('color y trazo distinguen cada curva', new Set(trazos.map((x) => x.stroke)).size === 4
+    && new Set(trazos.map((x) => x.dash)).size === 4, JSON.stringify(trazos));
   await tap('#f-sust'); await sleep(300);
-  ok('al llegar a tres, una cuarta queda deshabilitada', await js(`(() => {
+  ok('al llegar a cuatro, una quinta queda deshabilitada', await js(`(() => {
     const b = [...document.querySelectorAll('.ox-menuitem')].find(x => x.textContent.includes('Aceite'));
-    return !!b?.disabled && b.textContent.includes('Máx. 3');
+    return !!b?.disabled && b.textContent.includes('Máx. 4');
   })()`));
   await js(`document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true`); await sleep(250);
 
@@ -369,9 +370,9 @@ app.whenReady().then(async () => {
   await js(`(() => { const svg = document.querySelector('#linea svg');
     svg.dispatchEvent(new PointerEvent('pointermove', { clientX: ${multiR.r - 25}, clientY: ${multiR.cy}, bubbles: true })); return true; })()`);
   await sleep(250);
-  ok('el hover compara las tres en la misma fecha', (await cuenta('#linea .ap-chart__tip__serie')) === 3);
+  ok('el hover compara las cuatro en la misma fecha', (await cuenta('#linea .ap-chart__tip__serie')) === 4);
   await click('#btn-tabla'); await sleep(300);
-  ok('la tabla gemela tiene una columna por curva', (await cuenta('#tabla-wrap thead .ap-serie-cab')) === 3);
+  ok('la tabla gemela tiene una columna por curva', (await cuenta('#tabla-wrap thead .ap-serie-cab')) === 4);
 
   await tap('#f-sust'); await sleep(250); await menuItem('Todas las sustancias');
   await tap('#f-sust'); await sleep(250); await menuItem('Modafinilo');

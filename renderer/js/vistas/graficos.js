@@ -16,7 +16,7 @@ import { kpi, segmentedHTML } from './comunes.js';
 
 const METRICAS = [{ id: 'total', label: 'Dosis total' }, { id: 'tomas', label: 'Tomas' }];
 const MAPAS = [{ id: 'calendario', label: 'Calendario' }, { id: 'semana', label: 'Semana × hora' }];
-const MAX_SUSTANCIAS = 3;
+const MAX_SUSTANCIAS = 4;
 
 function seleccionGuardada(valor) {
   const ids = Array.isArray(valor) ? valor : (valor ? [valor] : []);
@@ -128,7 +128,7 @@ export function vistaGraficos() {
         return {
           label: x.archivada ? `${x.nombre} (archivada)` : x.nombre,
           icon: 'pill', selected: marcada, disabled: alMaximo && !marcada,
-          key: alMaximo && !marcada ? 'Máx. 3' : '',
+          key: alMaximo && !marcada ? `Máx. ${MAX_SUSTANCIAS}` : '',
           onSelect: () => {
             const next = marcada ? sustIds.filter((id) => id !== x.id) : [...sustIds, x.id];
             cambiar({ sustanciaGraficos: next.length ? next.slice(0, MAX_SUSTANCIAS) : null });

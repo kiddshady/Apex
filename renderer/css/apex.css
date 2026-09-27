@@ -308,6 +308,7 @@
   --ap-serie-1: var(--ox-accent);
   --ap-serie-2: oklch(72% .16 302);
   --ap-serie-3: oklch(78% .15 77);
+  --ap-serie-4: oklch(76% .15 145);
   position: relative;
   width: 100%;
   min-height: 40px;
@@ -335,8 +336,10 @@
 .ap-chart [data-serie="0"], .ap-tabla--series [data-serie="0"] { --ap-serie: var(--ap-serie-1, var(--ox-accent)); }
 .ap-chart [data-serie="1"], .ap-tabla--series [data-serie="1"] { --ap-serie: var(--ap-serie-2, oklch(72% .16 302)); }
 .ap-chart [data-serie="2"], .ap-tabla--series [data-serie="2"] { --ap-serie: var(--ap-serie-3, oklch(78% .15 77)); }
+.ap-chart [data-serie="3"], .ap-tabla--series [data-serie="3"] { --ap-serie: var(--ap-serie-4, oklch(76% .15 145)); }
 .ap-linea[data-serie="1"] { stroke-dasharray: 8 4; }
 .ap-linea[data-serie="2"] { stroke-dasharray: 2 4; }
+.ap-linea[data-serie="3"] { stroke-dasharray: 10 3 2 3; }
 /* El texto viste tokens de texto, nunca el color de la serie. */
 .ap-etiqueta { fill: var(--ox-text-2); font-family: var(--ox-font); font-size: 11px; font-weight: 500; }
 
