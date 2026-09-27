@@ -5,7 +5,7 @@ import { Icons } from '../icons.js';
 import Router from '../router.js';
 import { paint, head, esc, attempt } from '../ui.js';
 import { Toast } from '../overlays.js';
-import { bindSwitcher } from '../motion.js';
+import { bindSwitcher, alternar } from '../motion.js';
 import { RANGOS } from '../pk.js';
 import { UNIDADES } from '../vocab.js';
 import { S, apex, guardarAjustes, setContexto } from '../tienda.js';
@@ -63,7 +63,7 @@ export function vistaAjustes() {
             </div>
             <div class="ox-row" style="gap:8px;margin-top:16px;flex-wrap:wrap">
               <button class="ox-btn ox-btn--secondary ox-flashable" id="btn-buscar-upd">${Icons.svg('retry')} Buscar actualizaciones</button>
-              <button class="ox-btn ox-btn--primary ox-flashable" id="btn-instalar-upd" hidden>${Icons.svg('download')} Reiniciar y actualizar</button>
+              <button class="ox-btn ox-btn--primary ox-flashable ox-in-fade" id="btn-instalar-upd" hidden>${Icons.svg('download')} Reiniciar y actualizar</button>
               ${S.info?.repo ? `<button class="ox-btn ox-btn--ghost ox-flashable" id="btn-releases">${Icons.svg('external')} Ver versiones en GitHub</button>` : ''}
             </div>
             <p class="ox-meta" style="margin-top:14px;line-height:1.65">
@@ -135,8 +135,7 @@ export function vistaAjustes() {
   const pintarUpd = (e) => {
     const est = document.getElementById('upd-estado');
     if (est) est.textContent = describirEstado(e);
-    const inst = document.getElementById('btn-instalar-upd');
-    if (inst) inst.hidden = e.fase !== 'listo';
+    alternar(document.getElementById('btn-instalar-upd'), e.fase === 'listo');
     const buscar = document.getElementById('btn-buscar-upd');
     if (buscar) buscar.disabled = e.fase === 'buscando' || e.fase === 'descargando';
   };

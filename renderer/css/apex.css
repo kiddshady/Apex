@@ -146,6 +146,10 @@
 
 /* El «sale del stock de» del diálogo de toma, debajo de la cantidad. */
 .ap-carga { gap: 10px; margin-top: var(--ox-2); animation: ox-glide-in var(--ox-t-2) var(--ox-ease) both; }
+/* El campo de cantidad cuando cambia de forma (de sustancia simple a
+   combinación): entra con clase y no con style.animation, que le ganaría a
+   cualquier regla de salida. */
+.ap-entra { animation: ox-glide-in var(--ox-t-2) var(--ox-ease) both; }
 .ap-carga .ox-meta { white-space: nowrap; }
 
 /* ── Un día del registro ─────────────────────────────────────────────────── */

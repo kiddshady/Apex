@@ -17,6 +17,7 @@ import { Icons } from './icons.js';
 import { Toast } from './overlays.js';
 import Router from './router.js';
 import { esc } from './ui.js';
+import { alternar } from './motion.js';
 import { fmtBytes, relTime } from './format.js';
 
 const apex = window.apex;
@@ -55,7 +56,7 @@ function pintarStatusbar() {
   const f = estado.fase;
   // El chequeo automático no se anuncia mientras busca: solo el manual.
   const visible = f === 'disponible' || f === 'descargando' || f === 'listo' || (f === 'buscando' && estado.manual);
-  el.hidden = !visible;
+  alternar(el, visible);
   if (!visible) return;
 
   const texto = {

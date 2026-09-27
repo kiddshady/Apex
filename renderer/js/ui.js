@@ -7,7 +7,7 @@
 
 import { Icons } from './icons.js';
 import { Toast } from './overlays.js';
-import { initScrollFades } from './motion.js';
+import { initScrollFades, devolverAlPintar } from './motion.js';
 
 /** El contenedor de la vista activa. Lazy: no asume cuándo corre este módulo. */
 let _view = null;
@@ -140,6 +140,7 @@ export function paint(html) {
   const el = viewEl();
   el.innerHTML = html;
   Icons.mount(el);
+  devolverAlPintar(el);
   initScrollFades(el);
   return el;
 }

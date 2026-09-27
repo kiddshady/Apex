@@ -14,6 +14,7 @@
 
 import { relTime, fmtDosis, fmtQty } from './format.js';
 import { esc, path as rutaHTML } from './ui.js';
+import { alternar } from './motion.js';
 import { estadoDosis, esCombinacion, normalizarEsquema, stocks, estadoReserva } from './pk.js';
 
 export const api = window.onyx;
@@ -210,7 +211,7 @@ export function pintarChrome() {
   const curso = enCurso();
   const cursoEl = document.getElementById('stat-curso');
   if (cursoEl) {
-    cursoEl.hidden = !curso.length;
+    alternar(cursoEl, curso.length > 0);
     cursoEl.querySelector('.ox-statusbar__value').textContent = String(curso.length);
   }
 

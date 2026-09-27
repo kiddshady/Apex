@@ -380,6 +380,41 @@ app.whenReady().then(async () => {
   ok('mezclar mg y ml fuerza una comparación por tomas', (await texto('.ap-cardchart .ox-subtitle')) === 'Tomas por día'
     && !(await existe('#f-metrica')) && (await cuenta('#linea .ap-linea')) === 2);
 
+  /* Tocar un filtro remonta la vista entera. Antes eso se notaba: las cápsulas
+     de TODOS los segmentados volvían a ancho 0 y crecían, el scroll saltaba
+     arriba y la tabla abierta se cerraba de golpe. Se muestrea cuadro a cuadro,
+     porque el defecto dura lo que la transición. */
+  if (!(await existe('#tabla-wrap.is-open'))) await click('#btn-tabla');
+  await sleep(450);
+  await js(`(() => { document.querySelector('#view .ox-scroll').scrollTop = 99999; return true; })()`);
+  await sleep(300);
+  const remonte = await js(`(async () => {
+    const ancho = (id) => Math.round(parseFloat(getComputedStyle(document.getElementById(id), '::before').width));
+    const sc = () => document.querySelector('#view .ox-scroll').scrollTop;
+    const antes = { rango: ancho('f-rango'), scroll: sc() };
+    const destino = [...document.querySelectorAll('#f-mapa .ox-segmented__opt')].find(o => !o.classList.contains('is-active'));
+    destino.focus();
+    destino.click();
+    const anchos = [];
+    for (let i = 0; i < 20; i++) { await new Promise(r => requestAnimationFrame(r)); anchos.push(ancho('f-rango')); }
+    return { antes, anchos, scroll: sc(), tabla: !!document.querySelector('#tabla-wrap.is-open'),
+      boton: document.getElementById('btn-tabla').classList.contains('is-active'),
+      foco: document.activeElement?.closest('#f-mapa') ? document.activeElement.dataset.value : null,
+      valor: destino.dataset.value };
+  })()`);
+  ok('tocar un toggle no mueve la cápsula de los otros', remonte.anchos.every((w) => w === remonte.antes.rango), JSON.stringify(remonte.anchos));
+  ok('el remontado conserva el scroll', remonte.antes.scroll > 0 && remonte.scroll === remonte.antes.scroll, `${remonte.antes.scroll} → ${remonte.scroll}`);
+  ok('y la tabla sigue abierta, con su botón activo', remonte.tabla && remonte.boton);
+  ok('y el foco sigue en la opción tocada', remonte.foco === remonte.valor, `${remonte.foco} vs ${remonte.valor}`);
+  await js(`window.__apex.Router.go('inicio'); true`); await sleep(400);
+  const nace = await js(`(async () => {
+    window.__apex.Router.go('graficos');
+    const ws = [];
+    for (let i = 0; i < 8; i++) { ws.push(Math.round(parseFloat(getComputedStyle(document.getElementById('f-rango'), '::before').width))); await new Promise(r => requestAnimationFrame(r)); }
+    return ws;
+  })()`);
+  ok('al entrar a la vista la cápsula nace en su lugar', nace[0] > 0 && nace.every((w) => w === nace[0]), JSON.stringify(nace));
+
   console.log('\n16. El esquema de una sustancia');
   await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
   await sleep(700);

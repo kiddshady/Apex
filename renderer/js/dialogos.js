@@ -375,7 +375,7 @@ async function formularioDosis(estado, existente) {
     rotulo.setAttribute('for', campos()[0]?.id || '');
     zona.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, () => { tocar(s); validar(); }));
     campos().forEach((c) => c.addEventListener('input', () => { tocar(s); validar(); }));
-    if (entrar) zona.firstElementChild.style.animation = 'ox-glide-in 220ms var(--ox-ease) both';
+    if (entrar) zona.firstElementChild.classList.add('ap-entra');
     hint.textContent = pistaEsquema(s, !!existente);
   };
   const tocar = (s) => {

@@ -152,6 +152,8 @@ export function vistaGraficos() {
 
   const wrap = document.getElementById('tabla-wrap');
   const btn = document.getElementById('btn-tabla');
+  // Al remontarse por un filtro la tabla sigue abierta (remontar() en motion.js).
+  btn.classList.toggle('is-active', wrap.classList.contains('is-open'));
   btn.addEventListener('click', () => {
     const abierta = toggleReveal(wrap);
     btn.classList.toggle('is-active', abierta);

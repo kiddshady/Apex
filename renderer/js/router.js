@@ -10,6 +10,8 @@
    la app se degrada sola después de un rato de uso.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+import { remontar } from './motion.js';
+
 const routes = new Map();
 const listeners = new Set();
 
@@ -86,12 +88,15 @@ export function go(name, param = null) {
   return true;
 }
 
-/** Vuelve a montar la vista actual (después de un cambio de datos de fondo). */
+/** Vuelve a montar la vista actual (después de un cambio de datos de fondo).
+ *  Es la misma vista, así que conserva el lugar: scroll, foco, revelados y
+ *  las cápsulas de los segmentados (ver remontar() en motion.js). */
 export function refresh() {
   const route = routes.get(current.name);
   if (!route) return;
   release();
-  route.view(current.param);
+  if (host) remontar(host, () => route.view(current.param));
+  else route.view(current.param);
 }
 
 /** Se avisa después de cada navegación: (a, desde) => {} */

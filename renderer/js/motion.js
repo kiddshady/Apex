@@ -37,6 +37,35 @@ export function exit(el, { fallback = 400, onDone } = {}) {
   });
 }
 
+/**
+ * Muestra o esconde algo que se queda en el DOM (un ítem de la statusbar, un
+ * botón que aparece según el estado). `hidden` a secas es display:none, que no
+ * se anima: el elemento aparecía y desaparecía de golpe. El elemento lleva una
+ * clase de entrada (.ox-in-fade): al volver de display:none su animación
+ * arranca de nuevo, y la salida es la regla [data-state='closing'] de esa clase.
+ */
+export function alternar(el, visible, { fallback = 200 } = {}) {
+  if (!el) return;
+  if (visible) {
+    if (el.dataset.state === 'closing') delete el.dataset.state;   // se arrepintió a mitad de salida
+    el.hidden = false;
+    return;
+  }
+  if (el.hidden || el.dataset.state === 'closing') return;
+  el.dataset.state = 'closing';
+  let timer = 0;
+  const fin = (e) => {
+    if (e && e.target !== el) return;       // la de un hijo también burbujea
+    el.removeEventListener('animationend', fin);
+    clearTimeout(timer);
+    if (el.dataset.state !== 'closing') return;
+    el.hidden = true;
+    delete el.dataset.state;
+  };
+  el.addEventListener('animationend', fin);
+  timer = setTimeout(fin, fallback);
+}
+
 /** Escalona los hijos de un contenedor seteando --i (el CSS lo usa de delay). */
 export function stagger(container, selector = ':scope > *', step = 1) {
   container.querySelectorAll(selector).forEach((el, i) => {
@@ -120,6 +149,17 @@ export function syncTabs(tabs) {
   tabs.style.setProperty('--tab-w', `${active.offsetWidth}px`);
 }
 
+/* Pone un indicador en su lugar sin que viaje: la transición se apaga, se
+   mide, se fuerza el estilo y se vuelve a prender. Leer el estilo del pseudo
+   es lo que asienta el valor; sin eso, al sacar la clase el navegador ve el
+   cambio recién ahí y lo anima igual. */
+function colocar(root, pseudo, fn) {
+  root.classList.add('is-placing');
+  fn();
+  void getComputedStyle(root, pseudo).width;
+  root.classList.remove('is-placing');
+}
+
 /**
  * Cablea un grupo (segmentado o tabs) para que se comporte solo.
  * onChange recibe el value del botón elegido.
@@ -127,7 +167,19 @@ export function syncTabs(tabs) {
 export function bindSwitcher(root, onChange) {
   const isSeg = root.classList.contains('ox-segmented');
   const optSel = isSeg ? '.ox-segmented__opt' : '.ox-tab';
-  const sync = () => (isSeg ? syncSegmented(root) : syncTabs(root));
+  const pseudo = isSeg ? '::before' : '::after';
+  const medir = () => (isSeg ? syncSegmented(root) : syncTabs(root));
+  /* La primera medida no viaja: la cápsula nace donde va. Sin esto nacía en
+     ancho 0 contra la izquierda y crecía, y como la vista se remonta entera al
+     tocar un filtro, crecían todas a la vez. Si ya trae una posición (la que
+     devolvió remontar()), viaja desde ahí: es la que se tocó. */
+  let colocado = !!root.style.getPropertyValue(isSeg ? '--seg-w' : '--tab-w');
+  const sync = () => {
+    if (colocado) return medir();
+    if (!root.offsetWidth) return;          // todavía sin layout: lo hace el ResizeObserver
+    colocar(root, pseudo, medir);
+    colocado = true;
+  };
 
   root.addEventListener('click', (e) => {
     const opt = e.target.closest(optSel);
@@ -138,9 +190,81 @@ export function bindSwitcher(root, onChange) {
     onChange?.(opt.dataset.value, opt);
   });
 
+  sync();
   new ResizeObserver(sync).observe(root);
   raf2(sync);   // las fuentes pueden cambiar el ancho después del primer layout
   return sync;
+}
+
+/* ── Remontar la misma vista sin perder el lugar ─────────────────────────────
+   Router.refresh() vuelve a pintar la vista entera: así los números nunca se
+   desencuentran. Pero un innerHTML nuevo nace sin nada de lo que el viejo ya
+   había hecho: el scroll volvía arriba, un revelado abierto se cerraba de
+   golpe, el foco se perdía y las cápsulas arrancaban de cero. La foto se saca
+   antes de pintar y se devuelve en dos tiempos: lo que la vista tiene que ver
+   al cablearse (revelados e indicadores) apenas se pinta, y lo que depende
+   del alto final (scroll y foco) cuando la vista terminó de montar. */
+
+const INDICADORES = [
+  { sel: '.ox-segmented', pseudo: '::before', x: '--seg-x', w: '--seg-w' },
+  { sel: '.ox-tabs', pseudo: '::after', x: '--tab-x', w: '--tab-w' },
+];
+let foto = null;
+
+function fotografiar(root) {
+  const f = { scrolls: [], indicadores: new Map(), revelados: [], foco: null };
+  root.querySelectorAll('.ox-scroll').forEach((el) => f.scrolls.push(el.scrollTop));
+  for (const ind of INDICADORES) {
+    root.querySelectorAll(`${ind.sel}[id]`).forEach((el) => {
+      // Lo que se VE, no el destino: si la cápsula venía viajando, sigue desde ahí.
+      const cs = getComputedStyle(el, ind.pseudo);
+      const x = cs.transform && cs.transform !== 'none' ? new DOMMatrixReadOnly(cs.transform).m41 : 0;
+      f.indicadores.set(el.id, { ind, x, w: parseFloat(cs.width) || 0 });
+    });
+  }
+  root.querySelectorAll('.ox-reveal.is-open[id]').forEach((el) => f.revelados.push(el.id));
+  const act = document.activeElement;
+  const dueño = act && root.contains(act) ? act.closest('[id]') : null;
+  // Se reconoce por su id o por el data-value dentro de un grupo con id; si
+  // no, no hay forma honesta de encontrar su gemelo y el foco no se devuelve.
+  if (dueño && root.contains(dueño) && (dueño === act || act.dataset.value != null)) {
+    f.foco = { id: dueño.id, valor: dueño === act ? null : act.dataset.value };
+  }
+  return f;
+}
+
+/** Lo llama paint(): devuelve lo que la vista necesita ver al cablearse. */
+export function devolverAlPintar(root) {
+  if (!foto) return;
+  for (const id of foto.revelados) root.querySelector(`#${CSS.escape(id)}`)?.classList.add('is-open');
+  for (const [id, { ind, x, w }] of foto.indicadores) {
+    const el = root.querySelector(`#${CSS.escape(id)}`);
+    if (!el?.matches(ind.sel) || !w) continue;
+    colocar(el, ind.pseudo, () => {
+      el.style.setProperty(ind.x, `${x}px`);
+      el.style.setProperty(ind.w, `${w}px`);
+    });
+  }
+}
+
+/** Vuelve a montar lo que hay en root con `montar()`, sin perder el lugar. */
+export function remontar(root, montar) {
+  foto = fotografiar(root);
+  const f = foto;
+  try {
+    montar();
+  } finally {
+    foto = null;
+  }
+  const scrolls = root.querySelectorAll('.ox-scroll');
+  f.scrolls.forEach((top, i) => { if (scrolls[i] && top) scrolls[i].scrollTop = top; });
+  if (f.foco && (!document.activeElement || document.activeElement === document.body)) {
+    const dueño = root.querySelector(`#${CSS.escape(f.foco.id)}`);
+    const el = f.foco.valor != null
+      ? dueño?.querySelector(`[data-value="${CSS.escape(f.foco.valor)}"]`)
+      : dueño;
+    el?.focus({ preventScroll: true });
+  }
 }
 
 /* ── Campo numérico ─────────────────────────────────────────────────────────
