@@ -64,6 +64,8 @@ const DEFAULT_SETTINGS = {
   metricaGraficos: 'total',     // total · tomas
   mapaModo: 'calendario',       // calendario · semana
   sustanciaGraficos: null,      // [id, ...] (máx. 3), id legado, o null = todas
+  /** En el detalle de una toma, ¿se superpone la mediana de sus otros episodios? */
+  medianaEnToma: false,
   /** La última sustancia registrada: el diálogo la propone primero. */
   ultimaSustancia: null,
 };

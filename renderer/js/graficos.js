@@ -309,7 +309,12 @@ function dibujarSemanaHora(el, W, { matriz = [], max = 0, sinDatos = 'Sin tomas 
 /* ══ Curvas de intensidad: el perfil farmacocinético ═════════════════════════
    X = horas desde la toma, Y = intensidad 0–10. Con varios episodios es un
    gráfico de ÉNFASIS: cada episodio en gris fino, la mediana en el acento.
-   Con uno solo, la curva es el acento y cada hito lleva su fase escrita. */
+   Con uno solo, la curva es el acento y cada hito lleva su fase escrita.
+
+   `referencia` es la mediana de los OTROS episodios, para ponerla detrás de
+   uno solo: va punteada y en gris, porque lo que se mira sigue siendo el
+   episodio. Con `leyenda` el gráfico reserva su renglón aunque no haya
+   referencia, así prender y apagar la mediana no le cambia el alto. */
 
 export function grafCurvas(el, o) {
   el.classList.add('ap-chart');
@@ -325,14 +330,16 @@ function pasoHoras(tMax) {
   return 24;
 }
 
-function dibujarCurvas(el, W, { curvas = [], mediana = [], sinDatos = 'Todavía no hay hitos con intensidad' }) {
+function dibujarCurvas(el, W, { curvas = [], mediana = [], referencia = null, leyenda = false, sinDatos = 'Todavía no hay hitos con intensidad' }) {
   const H = 240;
   const m = { t: 20, r: 26, b: 30, l: 36 };
   const pw = Math.max(10, W - m.l - m.r);
   const ph = H - m.t - m.b;
-  if (!curvas.length) return vacio(el, sinDatos, H);
+  const ref = referencia?.puntos?.length ? referencia : null;
+  // Sin curva propia la referencia sola igual sirve: dice por dónde suele ir.
+  if (!curvas.length && !ref) return vacio(el, sinDatos, H);
 
-  const tMax = Math.max(1, ...curvas.map((c) => c.puntos[c.puntos.length - 1].t), ...mediana.map((p) => p.t));
+  const tMax = Math.max(1, ...curvas.map((c) => c.puntos[c.puntos.length - 1].t), ...mediana.map((p) => p.t), ...(ref ? ref.puntos.map((p) => p.t) : []));
   const paso = pasoHoras(tMax);
   const topT = Math.ceil(tMax / paso - 1e-9) * paso;
   const X = (t) => m.l + (t / topT) * pw;
@@ -352,6 +359,14 @@ function dibujarCurvas(el, W, { curvas = [], mediana = [], sinDatos = 'Todavía 
 
   let trazos = '';
   let marcas = '';
+  // La referencia va primero: queda debajo del episodio donde se cruzan.
+  if (ref) {
+    const d = ref.puntos.map((p, i) => `${i ? 'L' : 'M'}${r1(X(p.t))} ${r1(Y(p.i))}`).join('');
+    trazos += `<path class="ap-curva ap-curva--ref" d="${d}"/>`;
+    const fin = ref.puntos[ref.puntos.length - 1];
+    const anchor = X(fin.t) > W - m.r - 56 ? 'end' : 'start';
+    marcas += `<text class="ap-curva__lab ap-curva__lab--ref" x="${r1(X(fin.t) + (anchor === 'end' ? -6 : 6))}" y="${r1(Y(fin.i) - 6)}" text-anchor="${anchor}">mediana</text>`;
+  }
   for (const c of curvas) {
     const d = c.puntos.map((p, i) => `${i ? 'L' : 'M'}${r1(X(p.t))} ${r1(Y(p.i))}`).join('');
     trazos += `<path class="ap-curva${sola ? ' ap-curva--sola' : ''}" d="${d}"/>`;
@@ -386,6 +401,9 @@ function dibujarCurvas(el, W, { curvas = [], mediana = [], sinDatos = 'Todavía 
   </svg>${mediana.length ? `<div class="ap-leyenda">
     <span class="ap-leyenda__linea"></span><span>${esc(plural(curvas.length, 'episodio'))}</span>
     <span class="ap-leyenda__linea ap-leyenda__linea--acento"></span><span>mediana</span>
+  </div>` : ref || leyenda ? `<div class="ap-leyenda">
+    ${curvas.length ? '<span class="ap-leyenda__linea ap-leyenda__linea--acento"></span><span>este episodio</span>' : ''}
+    ${ref ? `<span class="ap-leyenda__linea ap-leyenda__linea--ref"></span><span>mediana de otros ${esc(plural(ref.n, 'episodio'))}</span>` : ''}
   </div>` : ''}`;
 
   const svg = el.querySelector('svg');
@@ -400,9 +418,21 @@ function dibujarCurvas(el, W, { curvas = [], mediana = [], sinDatos = 'Todavía 
     const x = X(th);
     cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); cursor.style.opacity = 1;
     let valor; let etiqueta = `+${fmtOffset(th * HORA, { signo: false })}`;
+    const vRef = ref ? interpolar(ref.puntos, th) : null;
+    const conRef = vRef == null ? '' : ` · mediana ${fmtQty(Math.round(vRef * 10) / 10)}`;
     if (sola) {
       const v = interpolar(curvas[0].puntos, th);
-      valor = v == null ? 'sin dato' : `${fmtQty(Math.round(v * 10) / 10)} / 10`;
+      if (v == null && vRef != null) {
+        // El episodio no llegó hasta acá (sigue abierto): habla la mediana.
+        valor = `${fmtQty(Math.round(vRef * 10) / 10)} / 10`;
+        etiqueta += ' · mediana';
+      } else {
+        valor = v == null ? 'sin dato' : `${fmtQty(Math.round(v * 10) / 10)} / 10`;
+        etiqueta += conRef;
+      }
+    } else if (!curvas.length) {
+      valor = vRef == null ? 'sin dato' : `${fmtQty(Math.round(vRef * 10) / 10)} / 10`;
+      etiqueta += ' · mediana';
     } else {
       const cerca = mediana.reduce((a, p) => (Math.abs(p.t - th) < Math.abs(a.t - th) ? p : a), mediana[0] || null);
       if (cerca && Math.abs(cerca.t - th) <= 0.3) {

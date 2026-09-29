@@ -376,6 +376,9 @@
 .ap-curva__pt { fill: var(--ox-text-3); stroke: var(--ox-s2); stroke-width: 1.5; }
 .ap-curva__pt--sola { fill: var(--ox-accent); stroke: var(--ox-s2); stroke-width: 2; }
 .ap-curva__lab { fill: var(--ox-text-2); font-family: var(--ox-font); font-size: 10.5px; font-weight: 500; }
+/* La mediana detrás de un episodio: contexto, no protagonista. */
+.ap-curva--ref { stroke: var(--ox-text-3); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 1; }
+.ap-curva__lab--ref { fill: var(--ox-text-3); }
 
 /* El tooltip: el valor manda, la etiqueta acompaña. */
 .ap-chart__tip {
@@ -439,6 +442,33 @@
 }
 .ap-leyenda__linea:first-child { margin-left: 0; }
 .ap-leyenda__linea--acento { border-color: var(--ox-accent); }
+.ap-leyenda__linea--ref { border-top-style: dashed; border-color: var(--ox-text-3); }
+
+/* Un gráfico que cambia por otro hace relevo en el mismo lugar: las dos capas
+   comparten la celda, la vieja se va en in-out y la nueva asoma cuando la
+   vieja ya va por la mitad. Sin nada saliendo, la nueva no espera. */
+.ap-relevo { display: grid; }
+.ap-relevo > * { grid-area: 1 / 1; min-width: 0; }
+.ap-relevo > .is-after { animation: ox-fade-in var(--ox-t-2) var(--ox-ease) 80ms both; }
+.ap-relevo > .is-settled { animation: none; }
+.ap-relevo > [data-state='closing'] { animation: ox-fade-out 160ms var(--ox-ease-both) both; pointer-events: none; }
+
+/* Un switch con su rótulo, para el encabezado de una vista. */
+.ap-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ox-2);
+  height: 30px;
+  padding: 0 var(--ox-2);
+  border-radius: var(--ox-r-sm);
+  color: var(--ox-text-2);
+  font-size: var(--ox-fs-12);
+  cursor: default;
+  transition: var(--tr-color), opacity var(--ox-t-2) var(--ox-ease-soft);
+}
+.ap-toggle:hover { color: var(--ox-text); }
+.ap-toggle.is-disabled { opacity: .45; }
+.ap-toggle.is-disabled .ox-switch { pointer-events: none; }
 
 /* Tarjeta de gráfico: el cuerpo respira menos arriba porque el head ya lo hizo. */
 .ap-cardchart { margin-bottom: var(--ox-4); }

@@ -4,10 +4,10 @@
 import { Icons } from '../icons.js';
 import Router from '../router.js';
 import { paint, head, esc, empty, status, attempt } from '../ui.js';
-import { tick } from '../motion.js';
+import { tick, exit } from '../motion.js';
 import { fmtHM, fmtDosis, fmtDiaLargo, fmtDiaSemana, fmtDiaCorto, fmtOffset, fmtQty, fmtMin, relTime, monogram, plural } from '../format.js';
-import { ordenarHitos, faseInfo, estadoDosis, inicioDia, curvas, MIN } from '../pk.js';
-import { dosis as tomarDosis, sustancia, etiquetaDosis, cantidadDosis, nombreSustancia, guardarDosis, setContexto } from '../tienda.js';
+import { ordenarHitos, faseInfo, estadoDosis, inicioDia, curvas, curvaMediana, MIN } from '../pk.js';
+import { S, dosis as tomarDosis, dosisDe, sustancia, etiquetaDosis, cantidadDosis, nombreSustancia, guardarDosis, guardarAjustes, setContexto } from '../tienda.js';
 import { viaLabel } from '../vocab.js';
 import { grafCurvas } from '../graficos.js';
 import { dialogoHito, borrarHito, dialogoDosis } from '../dialogos.js';
@@ -26,6 +26,16 @@ export function vistaDosis(id) {
   const fin = hitos.find((h) => h.fase === 'fin');
   const onset = hitos.find((h) => h.fase === 'onset');
   const estado = estadoDosis(d);
+  /* La mediana contra la que se compara sale de los OTROS episodios de la
+     sustancia: con este adentro se estaría comparando consigo mismo. */
+  const otras = curvas(dosisDe(d.sustanciaId).filter((x) => x.id !== d.id));
+  const med = curvaMediana(otras);
+  const hayMediana = med.length > 0;
+  const faltan = Math.max(0, 2 - otras.length);
+  const tipMediana = hayMediana
+    ? `Superponer la mediana de ${plural(otras.length, 'episodio')} de ${s?.nombre || 'esta sustancia'}`
+    : `${faltan === 1 ? 'Hace falta un episodio más' : 'Hacen falta dos episodios más'} de ${s?.nombre || 'esta sustancia'} con intensidad`;
+  let verMediana = hayMediana && S.ajustes?.medianaEnToma === true;
 
   setContexto(`${Icons.svg('gota', 'ox-icon--sm')}<span>${esc(etiquetaDosis(d))} · ${esc(fmtHM(d.at))}</span>`);
   paint(head({
@@ -34,6 +44,11 @@ export function vistaDosis(id) {
     crumbs: [{ label: 'Registro', view: 'registro' }, { label: `${fmtDiaSemana(d.at)} ${fmtHM(d.at)}` }],
     linea: true,
     actions: `
+      <label class="ap-toggle${hayMediana ? '' : ' is-disabled'}" data-tip="${esc(tipMediana)}">
+        <button type="button" class="ox-switch${verMediana ? ' is-on' : ''}" id="sw-mediana" role="switch"
+          aria-checked="${verMediana}" aria-label="Superponer la mediana"${hayMediana ? '' : ' disabled'}></button>
+        <span>Mediana</span>
+      </label>
       <button class="ox-btn ox-btn--primary ox-flashable" data-hito="${esc(d.id)}">${Icons.svg('hito')} Agregar hito</button>
       <button class="ox-iconbtn" data-menu="dosis" data-menu-arg="${esc(d.id)}" data-tip="Más">${Icons.svg('more')}</button>`,
   }) + `
@@ -65,7 +80,7 @@ export function vistaDosis(id) {
               <span class="ox-meta">intensidad según las horas desde la toma</span>
             </div>
             <div class="ox-card__body">
-              <div id="curva"></div>
+              <div class="ap-relevo" id="curva"></div>
             </div>
           </div>
           <div style="height:24px"></div>
@@ -106,11 +121,42 @@ export function vistaDosis(id) {
       </aside>
     </div>`);
 
-  Router.onLeave(grafCurvas(document.getElementById('curva'), {
-    curvas: cs,
-    mediana: [],
-    sinDatos: hitos.length ? 'Cargá intensidad en algún hito para ver la curva' : 'La curva aparece con el primer hito con intensidad',
-  }));
+  /* Cada estado del switch es una capa del gráfico. Al cambiar, la nueva se
+     monta encima y releva a la vieja en el mismo lugar: la escala del eje X
+     puede cambiar (la mediana dura más o menos que el episodio) y un redibujo
+     en seco se vería saltar. */
+  const caja = document.getElementById('curva');
+  let soltar = () => {};
+  const montarCurva = (relevo) => {
+    soltar();
+    const vieja = caja.lastElementChild;
+    const capa = document.createElement('div');
+    if (relevo && vieja) {
+      capa.className = 'is-after';
+      capa.addEventListener('animationend', (e) => { if (e.target === capa) capa.classList.add('is-settled'); }, { once: true });
+      exit(vieja, { fallback: 260 });
+    }
+    caja.appendChild(capa);
+    soltar = grafCurvas(capa, {
+      curvas: cs,
+      mediana: [],
+      referencia: verMediana ? { puntos: med, n: otras.length } : null,
+      leyenda: hayMediana,
+      sinDatos: hitos.length ? 'Cargá intensidad en algún hito para ver la curva' : 'La curva aparece con el primer hito con intensidad',
+    });
+  };
+  montarCurva(false);
+  Router.onLeave(() => soltar());
+
+  const sw = document.getElementById('sw-mediana');
+  sw.addEventListener('click', () => {
+    if (!hayMediana) return;
+    verMediana = !verMediana;
+    sw.classList.toggle('is-on', verMediana);
+    sw.setAttribute('aria-checked', String(verMediana));
+    montarCurva(true);
+    guardarAjustes({ medianaEnToma: verMediana });
+  });
 
   /* Las notas se guardan al salir del campo, no en cada tecla. */
   const notas = document.getElementById('notas');
