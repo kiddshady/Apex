@@ -14,7 +14,7 @@
 
 import { relTime, fmtDosis, fmtQty } from './format.js';
 import { esc, path as rutaHTML } from './ui.js';
-import { alternar } from './motion.js';
+import { alternar, frase, numero, swap } from './motion.js';
 import { estadoDosis, esCombinacion, normalizarEsquema, stocks, estadoReserva } from './pk.js';
 
 export const api = window.onyx;
@@ -190,12 +190,12 @@ export async function guardarAjustes(patch) {
   return S.ajustes;
 }
 
-/* ── Chrome: lo que vive fuera de la vista ───────────────────────────────── */
+/* ── Chrome: lo que vive fuera de la vista ───────────────────────────────────
+   Todo cambia con la app andando: los números destellan en su lugar y las
+   frases hacen relevo (numero y frase, en motion.js). Antes eran textContent e innerHTML a secas y
+   cambiaban de un cuadro al otro. */
 
-function set(id, valor) {
-  const el = document.getElementById(id);
-  if (el && el.textContent !== String(valor)) el.textContent = String(valor);
-}
+const set = (id, valor) => numero(document.getElementById(id), valor);
 
 export function pintarChrome() {
   set('cuenta-dosis', S.dosis.length);
@@ -205,28 +205,32 @@ export function pintarChrome() {
   set('stat-dosis', S.dosis.length);
 
   const ult = S.dosis[0];
-  const ultEl = document.querySelector('#stat-ultima .ox-statusbar__value');
-  if (ultEl) ultEl.textContent = ult ? `${etiquetaDosis(ult)} · ${relTime(ult.at)}` : '—';
+  frase(document.querySelector('#stat-ultima .ox-statusbar__value'),
+    ult ? esc(`${etiquetaDosis(ult)} · ${relTime(ult.at)}`) : '—');
 
   const curso = enCurso();
   const cursoEl = document.getElementById('stat-curso');
   if (cursoEl) {
     alternar(cursoEl, curso.length > 0);
-    cursoEl.querySelector('.ox-statusbar__value').textContent = String(curso.length);
+    numero(cursoEl.querySelector('.ox-statusbar__value'), curso.length);
   }
 
-  const guardado = document.querySelector('#stat-guardado .ox-statusbar__value');
-  if (guardado) guardado.textContent = S.ultimoGuardado ? relTime(S.ultimoGuardado) : '—';
+  frase(document.querySelector('#stat-guardado .ox-statusbar__value'),
+    S.ultimoGuardado ? relTime(S.ultimoGuardado) : '—');
 
   /* La carpeta de datos, recortada por el medio: en un rail de 224px no entra
-     entera ninguna ruta, y la cola es lo único que dice de cuál se trata. */
+     entera ninguna ruta, y la cola es lo único que dice de cuál se trata. Se
+     escribía en cada navegación y en cada escritura; con swap(), si es la
+     misma no se toca. */
   const dir = S.info?.dataDir || '';
   const foot = document.getElementById('rail-foot');
-  if (foot) foot.innerHTML = dir ? `<div class="ox-meta" data-tip="${esc(dir)}">${rutaHTML(dir)}</div>` : '';
+  if (foot) swap(foot, dir ? `<div class="ox-meta" data-tip="${esc(dir)}">${rutaHTML(dir)}</div>` : '', { relevo: true });
 }
 
-/** El contexto del centro de la titlebar: la vista lo pone, el router lo borra. */
+/** El contexto del centro de la titlebar: la vista lo pone, el router lo
+    borra. Aparece, se va o cambia con relevo, en el lugar: antes entraba y
+    salía de golpe (es el mismo arreglo que el contexto de Onyx). */
 export function setContexto(html = '') {
   const ctx = document.getElementById('titlebar-context');
-  if (ctx) ctx.innerHTML = html;
+  if (ctx) swap(ctx, html, { relevo: true });
 }

@@ -202,7 +202,7 @@ export function campoMomento({ id, label = 'Cuándo', ms = Date.now(), hint = ''
       <button type="button" class="ox-btn ox-btn--ghost ox-flashable" data-ahora
               data-tip="Poner la fecha y hora actuales">${Icons.svg('ahora')} Ahora</button>
     </div>
-    <span class="ox-field__hint ap-momento__hint" data-momento-hint>${esc(hint)}</span>
+    <span class="ox-field__hint ap-momento__hint ox-plegable" data-momento-hint${hint ? '' : ' hidden'}>${esc(hint)}</span>
   </div>`;
 }
 
@@ -221,8 +221,14 @@ export function cablearMomento(raiz, id, onChange) {
   const avisar = () => {
     const ms = leer();
     /* Una toma en el futuro casi siempre es un typo (21:00 escrito por 12:00 a
-       las 15). Se avisa, no se impide: hay quien anota la próxima. */
-    if (hint) hint.textContent = ms != null && ms > Date.now() + 60_000 ? 'Esa hora todavía no llegó.' : '';
+       las 15). Se avisa, no se impide: hay quien anota la próxima. La pista se
+       despliega y se pliega (.ox-plegable): antes aparecía y se iba de golpe y
+       empujaba lo de abajo. Al irse conserva el texto, que se esfuma con ella. */
+    const futuro = ms != null && ms > Date.now() + 60_000;
+    if (hint) {
+      if (futuro) hint.textContent = 'Esa hora todavía no llegó.';
+      hint.hidden = !futuro;
+    }
     onChange?.(ms);
   };
   cablearFechas(wrap, avisar);

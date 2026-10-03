@@ -265,7 +265,14 @@
   gap: var(--ox-2);
   align-items: center;
 }
-.ap-momento__hint:empty { display: none; }
+/* La pista del momento se pliega con .ox-plegable y `hidden` (campo-fecha.js):
+   como vive en un .ox-field, Onyx ya le hace comerse el gap mientras se
+   pliega (--ox-plegable-gap). */
+
+/* El «… desde la toma» del diálogo de hitos, pegado al momento: la columna
+   del diálogo tiene gap 16 y esto lo deja en 8. Plegado (hora que no se
+   entiende) se come el gap entero: el diálogo declara --ox-plegable-gap. */
+.ap-offset { margin-top: -8px; }
 
 /* ── Intensidad: el slider con su cifra ──────────────────────────────────── */
 .ap-intensidad {

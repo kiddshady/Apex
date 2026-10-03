@@ -9,7 +9,7 @@ import { fmtDosis, fmtQty, fmtDiaSemana, fmtDiaLargo, fmtHM, plural } from '../f
 import { dosisDiariaEsquema, ritmoReal, alcanza } from '../pk.js';
 import { S, sustancia, nombreSustancia, stocksActuales, setContexto } from '../tienda.js';
 import { selectHTML, bindSelect, stepperHTML } from '../dialogos.js';
-import { bindStepper } from '../motion.js';
+import { bindStepper, deslizarAlto, frase, swap, valor } from '../motion.js';
 import { kpi } from './comunes.js';
 
 export const BTN_INGRESO = `<button class="ox-btn ox-btn--primary ox-flashable" data-action="registrar-ingreso">
@@ -115,7 +115,7 @@ export function vistaStock() {
     const p = actual();
     const dosis = parseFloat(String(campo.value).replace(',', '.'));
     if (Number.isFinite(dosis)) dosificacion.set(p.clave, dosis);
-    res.innerHTML = resultado(p, dosis, ahora);
+    ponerResultado(res, resultado(p, dosis, ahora));
   };
   const cargar = () => {
     const p = actual();
@@ -167,38 +167,60 @@ function tarjeta(p, ahora) {
     </button>`;
 }
 
-/** «1 unidad por día · alcanza para 90 días: hasta el …», y los otros dos ritmos. */
+/** «1 unidad por día · alcanza para 90 días: hasta el …», y los otros dos
+    ritmos. Cada renglón con su clave, para ponerlos al día sin rehacerlos. */
 function resultado(p, dosis, ahora) {
   const queda = Math.max(0, p.restantes);
   const lineas = [];
   if (!(dosis > 0)) {
-    lineas.push(`<div class="ap-calc__linea">Poné cuánto tomás por día para ver hasta cuándo te alcanzan las <b>${esc(unidades(queda))}</b> que quedan.</div>`);
+    lineas.push({ k: 'pista', cls: '', html: `Poné cuánto tomás por día para ver hasta cuándo te alcanzan las <b>${esc(unidades(queda))}</b> que quedan.` });
   } else {
     const porDia = dosis / p.carga;
     const a = alcanza(p.restantes, porDia, ahora);
-    lineas.push(`<div class="ap-calc__linea ap-calc__linea--main">
-      <b>${esc(unidades(porDia))} ${porDia === 1 ? 'unidad' : 'unidades'} por día</b>
-      ${a.dias
-        ? `· alcanza para <b>${esc(plural(a.dias, 'día'))}</b> desde hoy: hasta el <b>${esc(fmtDiaLargo(a.hasta))}</b>`
-        : '· no alcanza ni para hoy'}</div>`);
+    lineas.push({ k: 'main', cls: ' ap-calc__linea--main', html: `<b>${esc(unidades(porDia))} ${porDia === 1 ? 'unidad' : 'unidades'} por día</b> ${a.dias
+      ? `· alcanza para <b>${esc(plural(a.dias, 'día'))}</b> desde hoy: hasta el <b>${esc(fmtDiaLargo(a.hasta))}</b>`
+      : '· no alcanza ni para hoy'}` });
   }
   const s = sustancia(p.sustanciaId);
   const esq = dosisDiariaEsquema(s);
   if (esq && s.unidad === p.unidad && esq !== dosis) {
     const a = alcanza(p.restantes, esq / p.carga, ahora);
-    lineas.push(`<div class="ap-calc__linea">Con tu esquema (${esc(fmtDosis(esq, p.unidad))} por día): ${a.dias ? `hasta el ${esc(fmtDiaLargo(a.hasta))}` : 'no alcanza ni para hoy'}.</div>`);
+    lineas.push({ k: 'esquema', cls: '', html: `Con tu esquema (${esc(fmtDosis(esq, p.unidad))} por día): ${a.dias ? `hasta el ${esc(fmtDiaLargo(a.hasta))}` : 'no alcanza ni para hoy'}.` });
   }
   const real = ritmoReal(p, ahora);
   if (real) {
     const a = alcanza(p.restantes, real, ahora);
-    lineas.push(`<div class="ap-calc__linea">Al ritmo real de los últimos 30 días (${esc(unidades(real))} por día): ${a.dias ? `hasta el ${esc(fmtDiaLargo(a.hasta))}` : 'no alcanza ni para hoy'}.</div>`);
+    lineas.push({ k: 'real', cls: '', html: `Al ritmo real de los últimos 30 días (${esc(unidades(real))} por día): ${a.dias ? `hasta el ${esc(fmtDiaLargo(a.hasta))}` : 'no alcanza ni para hoy'}.` });
   }
   const ultimas = p.tomas.slice(-3).reverse();
   if (ultimas.length) {
-    lineas.push(`<div class="ap-calc__linea ap-calc__linea--meta">Últimas que descontaron: ${ultimas.map((t) =>
-      `${esc(fmtDiaSemana(t.at))} ${esc(fmtHM(t.at))} (${esc(unidades(t.unidades))}${t.combinacion ? ` en ${esc(nombreSustancia(t.combinacion))}` : ''})`).join(' · ')}</div>`);
+    lineas.push({ k: 'ultimas', cls: ' ap-calc__linea--meta', html: `Últimas que descontaron: ${ultimas.map((t) =>
+      `${esc(fmtDiaSemana(t.at))} ${esc(fmtHM(t.at))} (${esc(unidades(t.unidades))}${t.combinacion ? ` en ${esc(nombreSustancia(t.combinacion))}` : ''})`).join(' · ')}` });
   }
-  return lineas.join('');
+  return lineas;
+}
+
+/* El resultado se pone al día en cada tecla y con las flechas del campo
+   apretadas. Antes se reescribía entero con innerHTML: cambiaba de golpe, y
+   un renglón que aparecía o se iba (el del esquema, cuando la dosis es la del
+   esquema) hacía saltar todo lo de abajo.
+   - Si cambian CUÁLES renglones hay: relevo del bloque y el alto se desliza.
+   - Si no: el principal se reescribe en el lugar con un destello (cambia en
+     cada paso de la flecha, y un relevo ahí parpadearía); los demás, frase. */
+function ponerResultado(res, lineas) {
+  const claves = lineas.map((l) => l.k).join();
+  if (res.dataset.claves !== claves) {
+    res.dataset.claves = claves;
+    const html = lineas.map((l) => `<div class="ap-calc__linea${l.cls}" data-linea="${l.k}">${l.html}</div>`).join('');
+    if (res.firstChild) deslizarAlto(res, () => swap(res, html, { relevo: true }));
+    else res.innerHTML = html;
+    return;
+  }
+  for (const l of lineas) {
+    const el = res.querySelector(`:scope > [data-linea="${l.k}"]`);
+    if (l.k === 'main') valor(el, l.html);
+    else frase(el, l.html);
+  }
 }
 
 function tablaIngresos() {

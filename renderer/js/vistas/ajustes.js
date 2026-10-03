@@ -5,7 +5,7 @@ import { Icons } from '../icons.js';
 import Router from '../router.js';
 import { paint, head, esc, attempt } from '../ui.js';
 import { Toast } from '../overlays.js';
-import { bindSwitcher, alternar } from '../motion.js';
+import { bindSwitcher, frase } from '../motion.js';
 import { RANGOS } from '../pk.js';
 import { UNIDADES } from '../vocab.js';
 import { S, apex, guardarAjustes, setContexto } from '../tienda.js';
@@ -61,9 +61,9 @@ export function vistaAjustes() {
               <span class="ox-kv__k">Versión</span><span class="ox-kv__v ox-mono">${esc(S.info?.version || '—')}</span>
               <span class="ox-kv__k">Estado</span><span class="ox-kv__v ox-kv__v--wrap" id="upd-estado">${esc(describirEstado())}</span>
             </div>
-            <div class="ox-row" style="gap:8px;margin-top:16px;flex-wrap:wrap">
+            <div class="ox-row" style="gap:8px;--ox-plegable-gap:8px;margin-top:16px;flex-wrap:wrap">
               <button class="ox-btn ox-btn--secondary ox-flashable" id="btn-buscar-upd">${Icons.svg('retry')} Buscar actualizaciones</button>
-              <button class="ox-btn ox-btn--primary ox-flashable ox-in-fade" id="btn-instalar-upd" hidden>${Icons.svg('download')} Reiniciar y actualizar</button>
+              <button class="ox-btn ox-btn--primary ox-flashable ox-plegable--ancho" id="btn-instalar-upd"${estadoActualizacion().fase === 'listo' ? '' : ' hidden'}>${Icons.svg('download')} Reiniciar y actualizar</button>
               ${S.info?.repo ? `<button class="ox-btn ox-btn--ghost ox-flashable" id="btn-releases">${Icons.svg('external')} Ver versiones en GitHub</button>` : ''}
             </div>
             <p class="ox-meta" style="margin-top:14px;line-height:1.65">
@@ -131,11 +131,15 @@ export function vistaAjustes() {
   });
 
   /* Actualizaciones: el estado se repinta con cada aviso del principal, y el
-     oyente se suelta al navegar. */
+     oyente se suelta al navegar. La frase: el porcentaje destella en su lugar
+     y un cambio de fase hace relevo (antes, textContent en seco). El botón de
+     instalar se pliega a lo ancho (.ox-plegable--ancho): con alternar() solo
+     se fundía, y «Ver versiones en GitHub», a su derecha, saltaba al aparecer
+     y otra vez al terminar de irse. */
   const pintarUpd = (e) => {
-    const est = document.getElementById('upd-estado');
-    if (est) est.textContent = describirEstado(e);
-    alternar(document.getElementById('btn-instalar-upd'), e.fase === 'listo');
+    frase(document.getElementById('upd-estado'), esc(describirEstado(e)));
+    const instalar = document.getElementById('btn-instalar-upd');
+    if (instalar) instalar.hidden = e.fase !== 'listo';
     const buscar = document.getElementById('btn-buscar-upd');
     if (buscar) buscar.disabled = e.fase === 'buscando' || e.fase === 'descargando';
   };

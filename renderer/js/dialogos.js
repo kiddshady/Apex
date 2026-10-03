@@ -15,7 +15,7 @@
 import { Icons } from './icons.js';
 import { Toast, Menu, Modal } from './overlays.js';
 import Router from './router.js';
-import { bindStepper, bindSwitcher, toggleReveal } from './motion.js';
+import { bindStepper, bindSwitcher, deslizarAlto, frase, swap, toggleReveal } from './motion.js';
 import { esc, attempt } from './ui.js';
 import { fmtDosis, fmtHM, fmtOffset, fmtQty, fmtDiaSemana, plural } from './format.js';
 import { campoMomento, cablearMomento } from './campo-fecha.js';
@@ -77,6 +77,19 @@ export function stepperHTML({ id, valor = '', min = 0, step = 1, placeholder = '
       <button type="button" class="ox-stepper__btn" data-step="up" tabindex="-1">${Icons.svg('chevronUp')}</button>
       <button type="button" class="ox-stepper__btn" data-step="down" tabindex="-1">${Icons.svg('chevronDown')}</button>
     </div></div>`;
+}
+
+/** El renglón de resumen de un diálogo (#f-total): el ícono queda y la frase
+    se pone al día en cada tecla (frase(), en motion.js): si cambian solo sus números
+    destella, si cambia el mensaje hace relevo. Antes se reescribía todo con
+    innerHTML en cada tecla y cambiaba de golpe. */
+function ponerTotal(total, icono, msg) {
+  let txt = total.querySelector(':scope > .ap-total__txt');
+  if (!txt) {
+    total.innerHTML = `${icono}<div class="ap-total__txt"></div>`;
+    txt = total.querySelector(':scope > .ap-total__txt');
+  }
+  frase(txt, msg);
 }
 
 /** El botón primario del modal que está abierto ahora. */
@@ -335,15 +348,23 @@ async function formularioDosis(estado, existente) {
     { valor: estado.via !== undefined ? estado.via : (s0?.via || null), onChange: () => { viaTocada = true; } });
 
   /* La zona de cantidad cambia de forma con la sustancia: un solo campo para
-     una simple, uno por componente para una combinación. Se rehace entera y
-     entra con el mismo deslizamiento de las vistas. */
-  const campos = () => [...zona.querySelectorAll('input[type="number"]')];
+     una simple, uno por componente para una combinación. Al abrir se pinta de
+     una; al cambiar de sustancia hace relevo en el lugar y el alto se desliza.
+     Antes se rehacía con innerHTML: lo viejo se iba en un cuadro y el modal
+     entero cambiaba de alto de golpe.
+     Durante el relevo lo viejo sigue adentro de la zona, en el calco (sin
+     ids, inerte): todo lo que se busca acá va con `:scope > :not(…)`, o se
+     agarraría el campo que se está yendo. */
+  const vivos = (sel) => [...zona.querySelectorAll(`:scope > :not(.ox-swap-out) ${sel}`)];
+  const campos = () => vivos('input[type="number"]');
   let selCarga = null;
   const pintarCantidad = (s, { entrar = false } = {}) => {
+    let html;
+    let cargas = [];
     if (esCombinacion(s)) {
-      rotulo.textContent = 'Cantidades';
+      frase(rotulo, 'Cantidades');
       const previas = compTocadas && estado.componentes?.length === s.componentes.length ? estado.componentes : null;
-      zona.innerHTML = `<div class="ap-comps">${s.componentes.map((c, i) => {
+      html = `<div class="ap-comps">${s.componentes.map((c, i) => {
         const cs = sustancia(c.sustanciaId);
         const v = previas ? previas[i] : c.cantidad;
         return `<div class="ap-comp">
@@ -353,12 +374,12 @@ async function formularioDosis(estado, existente) {
         </div>`;
       }).join('')}</div>`;
     } else {
-      rotulo.textContent = 'Cantidad';
+      frase(rotulo, 'Cantidad');
       const v = cantTocada ? estado.cantidad : s?.dosisHabitual;
       /* Con dos cargas en stock (150 y 300, por ejemplo) se puede decir de
          cuál sale la toma. Con una sola, o ninguna, no hay nada que elegir. */
-      const cargas = stocksActuales().filter((x) => x.sustanciaId === s?.id && x.unidad === s?.unidad);
-      zona.innerHTML = `<div class="ox-row" style="gap:10px">
+      cargas = stocksActuales().filter((x) => x.sustanciaId === s?.id && x.unidad === s?.unidad);
+      html = `<div class="ox-row" style="gap:10px">
         ${stepperHTML({ id: 'f-cant', valor: v ?? '', step: pasoPara(s?.dosisHabitual), extra: 'style="flex:1 1 auto"' })}
         <span class="ox-label ox-mono" id="f-unidad" style="min-width:40px">${esc(s?.unidad || '')}</span>
       </div>
@@ -366,17 +387,18 @@ async function formularioDosis(estado, existente) {
         <span class="ox-meta">Sale del stock de</span>
         <div class="ox-grow" style="min-width:0">${selectHTML({ id: 'f-carga' })}</div>
       </div>` : ''}`;
-      selCarga = cargas.length > 1 ? bindSelect(zona.querySelector('#f-carga'), [
-        { value: 'auto', label: 'Automático, según la cantidad' },
-        { sep: true },
-        ...cargas.map((x) => ({ value: x.carga, label: `${fmtDosis(x.carga, x.unidad)} por unidad · quedan ${fmtQty(Math.max(0, x.restantes))}`, icon: 'stock' })),
-      ], { valor: existente?.sustanciaId === s.id && cargas.some((x) => x.carga === Number(existente?.carga)) ? Number(existente.carga) : 'auto' }) : null;
     }
+    if (entrar) deslizarAlto(zona, () => swap(zona, html, { relevo: true }));
+    else zona.innerHTML = html;
+    selCarga = cargas.length > 1 ? bindSelect(zona.querySelector('#f-carga'), [
+      { value: 'auto', label: 'Automático, según la cantidad' },
+      { sep: true },
+      ...cargas.map((x) => ({ value: x.carga, label: `${fmtDosis(x.carga, x.unidad)} por unidad · quedan ${fmtQty(Math.max(0, x.restantes))}`, icon: 'stock' })),
+    ], { valor: existente?.sustanciaId === s.id && cargas.some((x) => x.carga === Number(existente?.carga)) ? Number(existente.carga) : 'auto' }) : null;
     rotulo.setAttribute('for', campos()[0]?.id || '');
-    zona.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, () => { tocar(s); validar(); }));
+    vivos('.ox-stepper').forEach((st) => bindStepper(st, () => { tocar(s); validar(); }));
     campos().forEach((c) => c.addEventListener('input', () => { tocar(s); validar(); }));
-    if (entrar) zona.firstElementChild.classList.add('ap-entra');
-    hint.textContent = pistaEsquema(s, !!existente);
+    frase(hint, esc(pistaEsquema(s, !!existente)));
   };
   const tocar = (s) => {
     if (esCombinacion(s)) { compTocadas = true; estado.componentes = campos().map((c) => numero(c.value)); }
@@ -645,7 +667,14 @@ export async function dialogoHito(d, existente = null) {
   const body = document.createElement('div');
   body.className = 'ox-col';
   body.style.gap = '16px';
+  // El mismo gap, para que lo que se pliega acá adentro se lo coma (#f-offset).
+  body.style.setProperty('--ox-plegable-gap', '16px');
   const v0 = estado.intensidad ?? INTENSIDAD_DEFAULT[estado.fase] ?? 5;
+  /* Cuánto pasó desde la toma. Nace ya escrito (así no se anima al abrir) y
+     se pliega cuando la hora no se entiende. */
+  const textoOffset = (at) => (at == null ? ''
+    : at < d.at ? 'Antes de la toma: revisá la hora.' : `${fmtOffset(at - d.at)} desde la toma`);
+  const offset0 = textoOffset(estado.at);
   body.innerHTML = `
     <div class="ox-field">
       <label class="ox-field__label">Fase</label>
@@ -655,7 +684,7 @@ export async function dialogoHito(d, existente = null) {
       </div>
     </div>
     ${campoMomento({ id: 'f-momento', label: 'Cuándo', ms: estado.at })}
-    <div class="ox-meta ox-mono" id="f-offset" style="margin-top:-8px"></div>
+    <div class="ox-meta ox-mono ap-offset ox-plegable${estado.at < d.at ? ' ox-danger' : ''}" id="f-offset"${offset0 ? '' : ' hidden'}>${esc(offset0)}</div>
     <div class="ox-field">
       <div class="ox-row" style="justify-content:space-between">
         <label class="ox-field__label" for="f-int">Intensidad</label>
@@ -723,7 +752,11 @@ export async function dialogoHito(d, existente = null) {
   const validar = () => {
     const at = momento.leer();
     const antes = at != null && at < d.at;
-    offset.textContent = at == null ? '' : antes ? 'Antes de la toma: revisá la hora.' : `${fmtOffset(at - d.at)} desde la toma`;
+    /* Si cambian solo los números destella; si pasa a «Antes de la toma»
+       hace relevo; si la hora no se entiende se pliega (y se va con su texto). */
+    const texto = textoOffset(at);
+    if (texto) frase(offset, esc(texto));
+    offset.hidden = !texto;
     offset.classList.toggle('ox-danger', antes);
     if (primario) primario.disabled = at == null || antes;
   };
@@ -894,14 +927,13 @@ export async function dialogoIngreso({ existente = null, sustanciaId = null, res
     const corta = completo && u * e < salido - 1e-9;
     const tarde = completo && salidas.length > 0 && at > salidas[0].at;
     const ok = completo && !corta && !tarde;
-    const icono = Icons.svg(reserva ? 'lock' : 'stock');
-    total.innerHTML = corta
-      ? `${icono}<div>Ya salieron <b>${esc(fmtQty(salido))}</b> de esta reserva: no puede quedar en menos.</div>`
+    ponerTotal(total, Icons.svg(reserva ? 'lock' : 'stock'), corta
+      ? `Ya salieron <b>${esc(fmtQty(salido))}</b> de esta reserva: no puede quedar en menos.`
       : tarde
-        ? `${icono}<div>La primera salida fue el ${esc(fmtDiaSemana(salidas[0].at))}: la reserva no puede ser posterior.</div>`
+        ? `La primera salida fue el ${esc(fmtDiaSemana(salidas[0].at))}: la reserva no puede ser posterior.`
         : ok
-          ? `${icono}<div>${reserva ? 'Se reservan' : 'Entran'} <b>${esc(fmtQty(u * e))} ${esc(selP.valor.toLowerCase())}</b> de ${esc(fmtDosis(c, s.unidad))} de ${esc(s.nombre)}.</div>`
-          : `${icono}<div>Completá la dosis por unidad, las unidades y los envases.</div>`;
+          ? `${reserva ? 'Se reservan' : 'Entran'} <b>${esc(fmtQty(u * e))} ${esc(selP.valor.toLowerCase())}</b> de ${esc(fmtDosis(c, s.unidad))} de ${esc(s.nombre)}.`
+          : 'Completá la dosis por unidad, las unidades y los envases.');
     if (primario) primario.disabled = !ok;
   };
   validar();
@@ -1075,7 +1107,7 @@ export async function dialogoSalida(reservaId, tipo) {
         + (alStock ? 'Desde ese momento las tomas las descuentan. ' : 'No vuelven a ningún lado. ')
         + (queda > 1e-9 ? `En la reserva quedan ${esc(fmtQty(queda))}.` : 'La reserva queda cerrada.');
     }
-    total.innerHTML = `${icono}<div>${msg}</div>`;
+    ponerTotal(total, icono, msg);
     if (primario) primario.disabled = !ok;
   };
   validar();

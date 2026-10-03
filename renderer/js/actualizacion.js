@@ -17,7 +17,7 @@ import { Icons } from './icons.js';
 import { Toast } from './overlays.js';
 import Router from './router.js';
 import { esc } from './ui.js';
-import { alternar } from './motion.js';
+import { alternar, swap } from './motion.js';
 import { fmtBytes, relTime } from './format.js';
 
 const apex = window.apex;
@@ -66,8 +66,14 @@ function pintarStatusbar() {
     listo: `Reiniciar y actualizar a ${estado.nueva}`,
   }[f];
   el.classList.toggle('is-lista', f === 'listo');
-  el.innerHTML = `${Icons.svg(f === 'listo' ? 'retry' : 'download')}<span class="ox-statusbar__value">${esc(texto)}</span>`
-    + (f === 'descargando' ? `<span class="ox-meter" style="--ox-pct:${Math.round(estado.progreso || 0)}%"><span class="ox-meter__fill"></span></span>` : '');
+  /* La estructura se arma una vez por fase y con relevo; la barra avanza en
+     su lugar. Antes se reescribía todo en cada aviso del principal —en cada
+     % de la descarga—: la barra nacía de nuevo cada vez y saltaba sin su
+     transición, y el texto cambiaba de golpe entre fases. Con la misma
+     estructura, swap() no toca nada. */
+  swap(el, `${Icons.svg(f === 'listo' ? 'retry' : 'download')}<span class="ox-statusbar__value">${esc(texto)}</span>`
+    + (f === 'descargando' ? '<span class="ox-meter"><span class="ox-meter__fill"></span></span>' : ''), { relevo: true });
+  el.querySelector(':scope > .ox-meter')?.style.setProperty('--ox-pct', `${Math.round(estado.progreso || 0)}%`);
   el.dataset.tip = f === 'listo'
     ? 'Cierra la app, instala la versión nueva y la vuelve a abrir'
     : f === 'descargando' ? `${Math.round(estado.progreso || 0)} %${estado.velocidad ? ` · ${fmtBytes(estado.velocidad)}/s` : ''}` : 'Ver en Ajustes';

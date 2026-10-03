@@ -86,6 +86,12 @@ app.whenReady().then(async () => {
   ok('la marca es la de Apex, no el octágono', (await js(`document.querySelector('.ox-brand__mark path').getAttribute('d')`)).startsWith('M2.2 12.4C'));
   ok('sin datos, Hoy ofrece crear una sustancia', await existe('[data-action="nueva-sustancia"]'));
   ok('los datos van a la carpeta temporal', (await js(`window.onyx.info().then(i => i.dataDir)`)) === DATA, DATA);
+  /* El primer llenado de los contadores no es un cambio: no destella (si
+     arrancaran en «0» en el HTML, el primer dato contaría como cambio y
+     quedarían teñidos de acento mientras se va el splash). */
+  const destellados = await js(`['#cuenta-dosis', '#cuenta-sustancias', '#cuenta-stock', '#cuenta-reservas', '#stat-dosis']
+    .filter((s) => document.querySelector(s)?.classList.contains('ox-ticked'))`);
+  ok('al arrancar, los contadores no destellan', destellados.length === 0, destellados.join(' | '));
 
   console.log('\n2. Crear una sustancia por su diálogo');
   await click('[data-action="nueva-sustancia"]');
@@ -136,6 +142,9 @@ app.whenReady().then(async () => {
   ok('un hito ANTES de la toma apaga el primario', (await primarioApagado()) === true);
   ok('y lo dice', (await texto('#f-offset')).includes('Antes de la toma'));
   await escribir('#f-momento-hora', '1500');
+  // De «Antes de la toma» a «+1h» es un relevo: mientras dura, el texto junta
+  // lo que se va con lo que llega. Se lee cuando terminó.
+  await sleep(300);
   ok('a las 15:00 dice +1h', (await texto('#f-offset')).startsWith('+1h'));
   await escribir('#f-int', '4');
   ok('el slider pinta su valor', (await texto('#f-int-val')) === '4');
@@ -699,6 +708,122 @@ app.whenReady().then(async () => {
     ok(`${v}: ningún anillo de foco se corta ni roza un canto`, cortes.length === 0, '\n      ' + cortes.join('\n      '));
   }
   await js(`document.getElementById('aud-notr')?.remove()`);
+
+  /* ── 21. El movimiento, medido ─────────────────────────────────────────────
+     La auditoría de Apex contra Onyx (octubre 2026) encontró lo que cambiaba
+     de golpe. Cada caso se muestrea en la página, cuadro por cuadro. */
+  console.log('\n21. El movimiento, medido');
+
+  /* Repintar Inicio (después de guardar algo, Router.refresh()) es un fundido
+     y no vuelve a contar desde 0: antes cada contador corría de nuevo. */
+  await click('[data-view="inicio"]');
+  await sleep(1500);
+  const repinte = await js(`(async () => {
+    const Router = (await import('./js/router.js')).default;
+    const final = document.getElementById('k-semana')?.textContent;
+    Router.refresh();
+    const calco = !!document.querySelector('.ox-main--saliente');
+    const textos = [];
+    for (let i = 0; i < 5; i++) {
+      textos.push(document.getElementById('k-semana')?.textContent);
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    return { calco, final, textos };
+  })()`);
+  ok('repintar Inicio es un fundido', repinte.calco, JSON.stringify(repinte));
+  ok('y los contadores no vuelven a contar desde 0', repinte.final != null && repinte.textos.every((t) => t === repinte.final), JSON.stringify(repinte));
+
+  /* El contexto de la titlebar se va esfumándose al salir de una toma (antes
+     innerHTML = '' de golpe). */
+  const contexto = await js(`(async () => {
+    const Router = (await import('./js/router.js')).default;
+    const { S } = await import('./js/tienda.js');
+    if (!S.dosis.length) return { sinDosis: true };
+    Router.go('dosis', S.dosis[0].id);
+    await new Promise((r) => setTimeout(r, 600));
+    Router.go('inicio');
+    const saliendo = !!document.querySelector('#titlebar-context > .ox-swap-out');
+    await new Promise((r) => setTimeout(r, 500));
+    return { saliendo, vacio: document.getElementById('titlebar-context').children.length === 0 };
+  })()`);
+  ok('el contexto de la titlebar se va esfumándose', contexto.saliendo && contexto.vacio, JSON.stringify(contexto));
+
+  /* El botón de instalar se pliega a lo ancho (.ox-plegable--ancho), también
+     con el [hidden] { display: none !important } global de Apex: la
+     transición le gana al !important. */
+  await click('[data-view="ajustes"]');
+  await sleep(800);
+  const plegado = await js(`(async () => {
+    const b = document.getElementById('btn-instalar-upd');
+    const ancho = () => b.getBoundingClientRect().width;
+    const frames = async (ms) => { const out = []; const t0 = performance.now();
+      while (performance.now() - t0 < ms) { out.push(Math.round(ancho())); await new Promise((r) => requestAnimationFrame(r)); }
+      return out; };
+    b.hidden = false;
+    const abre = await frames(320);
+    const abierto = Math.round(ancho());
+    b.hidden = true;
+    const cierra = await frames(320);
+    return { abre, cierra, abierto, display: getComputedStyle(b).display };
+  })()`);
+  const aMedias = (xs, max) => xs.some((w) => w > 1 && w < max - 1);
+  ok('el botón de instalar se despliega a lo ancho, no aparece de golpe', plegado.abierto > 0 && aMedias(plegado.abre, plegado.abierto), JSON.stringify(plegado));
+  ok('y se pliega al irse, aun con el [hidden] !important', aMedias(plegado.cierra, plegado.abierto) && plegado.display === 'none', JSON.stringify(plegado));
+
+  /* La barra de descarga de la statusbar es la MISMA de un aviso al otro y
+     avanza con su transición. Antes se recreaba en cada %. El principal manda
+     los estados por el canal de siempre: acá se fabrican. */
+  win.webContents.send('actualizacion:estado', { fase: 'descargando', nueva: '9.9.9', progreso: 10, manual: false });
+  await sleep(500);
+  await js(`(() => { window.__medidor = document.querySelector('#stat-update > .ox-meter'); return true; })()`);
+  win.webContents.send('actualizacion:estado', { fase: 'descargando', nueva: '9.9.9', progreso: 40, manual: false });
+  await sleep(80);
+  const medidor = await js(`(() => { const m = document.querySelector('#stat-update > .ox-meter');
+    return { habia: !!window.__medidor, mismo: !!m && m === window.__medidor, pct: m?.style.getPropertyValue('--ox-pct'),
+      viaja: !!m && m.querySelector('.ox-meter__fill').getAnimations().length > 0 }; })()`);
+  win.webContents.send('actualizacion:estado', { fase: 'inactivo', motivo: 'dev', manual: false });
+  await sleep(500);
+  ok('la barra de descarga es la misma de un aviso al otro', medidor.habia && medidor.mismo && medidor.pct === '40%', JSON.stringify(medidor));
+  ok('y avanza con su transición', medidor.viaja, JSON.stringify(medidor));
+
+  /* La calculadora de stock: el renglón principal se reescribe en su lugar
+     (el mismo nodo) en cada cambio de la dosificación. */
+  await click('[data-view="stock"]');
+  await sleep(800);
+  const calc = await js(`(async () => {
+    const res = document.getElementById('c-res');
+    const campo = document.getElementById('c-dosis');
+    if (!res || !campo) return { sinCalc: true };
+    const main = () => res.querySelector(':scope > [data-linea="main"]');
+    const poner = async (v) => { campo.value = v; campo.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => setTimeout(r, 400)); };
+    await poner('300');
+    const m0 = main();
+    await poner('450');
+    return { habia: !!m0, mismo: !!m0 && main() === m0, dice: main()?.textContent.replace(/\\s+/g, ' ').trim() };
+  })()`);
+  ok('la calculadora de stock pone al día su renglón en el lugar', calc.habia && calc.mismo && /3 unidades por día/.test(calc.dice || ''), JSON.stringify(calc));
+
+  /* La pista del momento («Esa hora todavía no llegó») se despliega con su
+     alto en vez de aparecer de golpe. */
+  await click('#btn-registrar');
+  await sleep(600);
+  const pista = await js(`(async () => {
+    const h = document.querySelector('.ox-modal [data-momento-hint]');
+    const hora = document.querySelector('.ox-modal [data-hora]');
+    if (!h || !hora) return { sinCampo: true };
+    hora.value = '23:59';
+    hora.dispatchEvent(new Event('input', { bubbles: true }));
+    hora.dispatchEvent(new Event('change', { bubbles: true }));
+    hora.dispatchEvent(new Event('blur', { bubbles: true }));
+    const altos = []; const t0 = performance.now();
+    while (performance.now() - t0 < 320) { altos.push(Math.round(h.getBoundingClientRect().height)); await new Promise((r) => requestAnimationFrame(r)); }
+    return { altos, final: Math.round(h.getBoundingClientRect().height), visible: !h.hidden };
+  })()`);
+  await click('.ox-modal__foot .ox-btn:not(.ox-btn--primary)');
+  await sleep(500);
+  if (pista.sinCampo || !pista.visible) console.log(`  --   pista del momento salteada (${JSON.stringify(pista)})`);
+  else ok('la pista del momento se despliega con su alto', pista.final > 0 && aMedias(pista.altos, pista.final), JSON.stringify(pista));
 
 
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
