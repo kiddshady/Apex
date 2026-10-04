@@ -42,12 +42,21 @@ function vistaPiezas() {
     actions: `<button class="ox-btn ox-btn--ghost ox-flashable" id="replay">${Icons.svg('retry')} Repetir entradas</button>`,
   }) + designHTML());
   wireDesign(viewEl());
+  /* La entrada se repite con la Web Animations API y SIN fill: al terminar no
+     queda nada aplicado. Antes era un `style.animation` en línea con `both`,
+     que retenía para siempre el último cuadro (transform y opacidad): el
+     cuerpo pasaba a ser bloque contenedor de lo `fixed` y frontera de
+     backdrop, y el inline le hubiera ganado a cualquier salida. Duración y
+     curva salen de los tokens, no de números sueltos. (De Onyx.) */
   document.getElementById('replay')?.addEventListener('click', () => {
     const body = document.getElementById('design-body');
     if (!body) return;
-    body.style.animation = 'none';
-    void body.offsetWidth;
-    body.style.animation = 'ox-glide-in 420ms var(--ox-ease) both';
+    const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    body.__entrada?.cancel();
+    body.__entrada = body.animate(
+      [{ opacity: 0, transform: 'translateX(-10px)' }, { opacity: 1, transform: 'none' }],   // ox-glide-in
+      { duration: parseFloat(tok('--ox-t-4')) || 420, easing: tok('--ox-ease') || 'ease-out' },
+    );
   });
 }
 
