@@ -18,7 +18,8 @@ import { S, api, cargarTodo, pintarChrome, dosis as tomarDosis, sustancia, setCo
 import {
   dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, dialogoIngreso,
   dialogoReserva, dialogoSalida,
-  menuDosis, menuSustancia, menuIngreso, menuReserva, menuSalida, confirmarBorrarDosis,
+  menuDosis, menuSustancia, menuIngreso, menuReserva, menuSalida, menuRecuento, confirmarBorrarDosis,
+  dialogoRecuento,
 } from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
 
@@ -96,6 +97,10 @@ async function registrarIngreso(sustanciaId = null) {
   if (await dialogoIngreso({ sustanciaId })) Router.name === 'stock' ? Router.refresh() : Router.go('stock');
 }
 
+async function recontar(clave = null) {
+  if (await dialogoRecuento({ clave })) Router.name === 'stock' ? Router.refresh() : Router.go('stock');
+}
+
 async function nuevaReserva(sustanciaId = null) {
   if (await dialogoReserva({ sustanciaId })) Router.name === 'reservas' ? Router.refresh() : Router.go('reservas');
 }
@@ -140,7 +145,7 @@ function cablearShell() {
     if (trigger) {
       e.stopPropagation();
       const arg = trigger.dataset.menuArg;
-      const menus = { dosis: menuDosis, sustancia: menuSustancia, ingreso: menuIngreso, reserva: menuReserva, salida: menuSalida };
+      const menus = { dosis: menuDosis, sustancia: menuSustancia, ingreso: menuIngreso, reserva: menuReserva, salida: menuSalida, recuento: menuRecuento };
       const items = menus[trigger.dataset.menu]?.(arg, { despues: () => Router.refresh() }) || null;
       if (items) Menu.show(trigger, items, { align: 'end' });
       return;
@@ -165,6 +170,7 @@ function cablearShell() {
       else if (a === 'nueva-sustancia') nuevaSustancia();
       else if (a === 'nueva-combinacion') nuevaCombinacion();
       else if (a === 'registrar-ingreso') registrarIngreso(act.dataset.arg || null);
+      else if (a === 'recontar') recontar(act.dataset.arg || null);
       else if (a === 'nueva-reserva') nuevaReserva(act.dataset.arg || null);
       else if (a === 'pasar-stock') salidaReserva(act.dataset.arg, 'stock');
       else if (a === 'entregar-reserva') salidaReserva(act.dataset.arg, 'entrega');

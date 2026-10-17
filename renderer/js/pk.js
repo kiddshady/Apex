@@ -397,7 +397,14 @@ export function esquemaDelDia(s, dosis, ahora = Date.now()) {
 
    Las tomas descuentan solo a partir del primer ingreso de ese stock: lo que
    pasó antes no se compró acá. Una toma de 300 mg con comprimidos de 150 son
-   dos unidades; una de 75, media. */
+   dos unidades; una de 75, media.
+
+   Un recuento es contar lo que hay de verdad: «tengo 20». No guarda la
+   diferencia sino lo contado, porque lo contado es lo cierto: en ese momento
+   el stock pasa a valer eso, y la diferencia con lo que decía la cuenta (un
+   comprimido perdido, uno contado de más) se resta o se suma. Lo que entra o
+   se toma después sigue contando desde ahí. Si más tarde se carga una toma
+   olvidada de antes del recuento, el recuento la absorbe: ya estaba contada. */
 
 export const unidadesIngreso = (i) => (Number(i.unidadesPorEnvase) || 0) * (Number(i.envases) || 0);
 
@@ -421,13 +428,15 @@ export function cargaParaToma(cantidad, cargas) {
  * consumido (en unidades, puede ser fraccionario) y lo que queda. Una toma que
  * trae `carga` (elegida a mano en el diálogo) sale de ese stock si existe; si
  * no, de cargaParaToma. Lo tomado dentro de combinaciones también descuenta.
+ * Cada recuento vuelve con lo que decía la cuenta en ese momento (`antes`) y
+ * lo que ajustó (`diferencia`); la suma de los ajustes es `ajustado`.
  */
-export function stocks(ingresos, dosis) {
+export function stocks(ingresos, dosis, recuentos = []) {
   const pools = new Map();
   for (const i of ingresos) {
     const carga = Number(i.carga);
     if (!i.sustanciaId || !(carga > 0) || !Number.isFinite(Number(i.at))) continue;
-    const clave = `${i.sustanciaId}|${carga}|${i.unidad}`;
+    const clave = claveStock(i);
     let p = pools.get(clave);
     if (!p) {
       p = { clave, sustanciaId: i.sustanciaId, carga, unidad: i.unidad, desde: i.at, ingresado: 0, consumido: 0, ingresos: [], tomas: [] };
@@ -457,8 +466,38 @@ export function stocks(ingresos, dosis) {
     }
   }
   return lista
-    .map((p) => ({ ...p, restantes: p.ingresado - p.consumido, tomas: p.tomas.sort((a, b) => a.at - b.at) }))
+    .map((p) => {
+      const tomas = p.tomas.sort((a, b) => a.at - b.at);
+      const propios = recuentos.filter((r) => claveStock(r) === p.clave && Number.isFinite(Number(r.at)) && Number(r.contadas) >= 0);
+      const rec = ajustarRecuentos(p, tomas, propios);
+      const ajustado = rec.reduce((n, r) => n + r.diferencia, 0);
+      return { ...p, tomas, recuentos: rec, ajustado, restantes: p.ingresado - p.consumido + ajustado };
+    })
     .sort((a, b) => a.sustanciaId.localeCompare(b.sustanciaId) || a.carga - b.carga);
+}
+
+/** La clave de stock de un ingreso o un recuento: droga, carga y unidad. */
+export const claveStock = (x) => `${x.sustanciaId}|${Number(x.carga)}|${x.unidad}`;
+
+/**
+ * Recorre el stock en orden de fecha y, en cada recuento, mide cuánto decía la
+ * cuenta y cuánto hay que ajustar para que diga lo contado. Lo que entra o se
+ * toma en el mismo milisegundo del recuento ya estaba cuando se contó.
+ */
+function ajustarRecuentos(p, tomas, recuentos) {
+  if (!recuentos.length) return [];
+  const mov = [
+    ...p.ingresos.map((i) => ({ at: Number(i.at), d: unidadesIngreso(i) })),
+    ...tomas.map((t) => ({ at: t.at, d: -t.unidades })),
+  ].sort((a, b) => a.at - b.at);
+  let nivel = 0; let k = 0;
+  return [...recuentos].sort((a, b) => a.at - b.at).map((r) => {
+    while (k < mov.length && mov[k].at <= r.at) nivel += mov[k++].d;
+    const contadas = Number(r.contadas);
+    const antes = nivel;
+    nivel = contadas;
+    return { id: r.id, at: Number(r.at), contadas, antes, diferencia: contadas - antes };
+  });
 }
 
 /* ── Reservas ────────────────────────────────────────────────────────────────

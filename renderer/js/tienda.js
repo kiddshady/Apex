@@ -24,6 +24,7 @@ const colSustancias = api.col('sustancias');
 const colDosis = api.col('dosis');
 const colIngresos = api.col('ingresos');
 const colReservas = api.col('reservas');
+const colRecuentos = api.col('recuentos');
 
 export const S = {
   info: null,
@@ -32,6 +33,7 @@ export const S = {
   dosis: [],           // siempre de la más reciente a la más vieja
   ingresos: [],        // idem
   reservas: [],        // idem, por la fecha en que se guardaron
+  recuentos: [],       // idem
   ultimoGuardado: null,
 };
 
@@ -39,11 +41,12 @@ const porFechaDesc = (a, b) => (b.at || 0) - (a.at || 0);
 const porNombre = (a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
 
 export async function cargarTodo() {
-  const [info, ajustes, sustancias, dosis, ingresos, reservas] = await Promise.all([
-    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(), colIngresos.list(), colReservas.list(),
+  const [info, ajustes, sustancias, dosis, ingresos, reservas, recuentos] = await Promise.all([
+    api.info(), api.settings.get(), colSustancias.list(), colDosis.list(), colIngresos.list(), colReservas.list(), colRecuentos.list(),
   ]);
   S.ingresos = ingresos.sort(porFechaDesc);
   S.reservas = reservas.sort(porFechaDesc);
+  S.recuentos = recuentos.sort(porFechaDesc);
   S.info = info;
   S.ajustes = ajustes;
   S.sustancias = sustancias.sort(porNombre);
@@ -91,8 +94,9 @@ export function textoEsquema(s) {
 }
 
 /** Los stocks de ahora, calculados sobre el espejo. */
-export const stocksActuales = () => stocks(S.ingresos, S.dosis);
+export const stocksActuales = () => stocks(S.ingresos, S.dosis, S.recuentos);
 export const ingreso = (id) => S.ingresos.find((i) => i.id === id) || null;
+export const recuento = (id) => S.recuentos.find((r) => r.id === id) || null;
 
 export const reserva = (id) => S.reservas.find((r) => r.id === id) || null;
 /** Las reservas a las que todavía les queda algo, cada una con su estado. */
@@ -165,6 +169,22 @@ export async function guardarIngreso(i) {
 export async function borrarIngreso(id) {
   await colIngresos.remove(id);
   S.ingresos = S.ingresos.filter((x) => x.id !== id);
+  tocar();
+}
+
+export async function guardarRecuento(r) {
+  const ahora = Date.now();
+  const item = { ...r, createdAt: r.createdAt || ahora, updatedAt: ahora };
+  if (!item.id) item.id = await colRecuentos.nextId('c');
+  await colRecuentos.save(item);
+  S.recuentos = [...S.recuentos.filter((x) => x.id !== item.id), item].sort(porFechaDesc);
+  tocar();
+  return item;
+}
+
+export async function borrarRecuento(id) {
+  await colRecuentos.remove(id);
+  S.recuentos = S.recuentos.filter((x) => x.id !== id);
   tocar();
 }
 

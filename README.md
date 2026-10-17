@@ -106,6 +106,26 @@ calculadora de hasta cuándo alcanza: dosificación por día → unidades por d�
 días y fecha, **siempre contados desde hoy**. Debajo, la misma cuenta con el
 esquema fijo y con el ritmo real de los últimos 30 días.
 
+### Los recuentos
+
+Cuando se pierde un comprimido o el blíster estaba mal contado, la cuenta deja
+de coincidir con lo que hay. **Recontar** (arriba en Stock) anota cuántas
+unidades se contaron a mano y cuándo, en la colección **recuentos**:
+
+```json
+{ "id": "c-0001", "sustanciaId": "s-0002", "carga": 150, "unidad": "mg",
+  "contadas": 20, "at": 1789900000000, "notas": "Se cayó uno." }
+```
+
+Se guarda lo **contado**, no la diferencia: en ese momento el stock pasa a valer
+eso, y lo que entra o se toma después sigue contando desde ahí. La diferencia con
+lo que decía la cuenta se mide cada vez en `stocks()` (cada recuento vuelve con
+`antes` y `diferencia`, y el stock con `ajustado`): se resta, o se suma si
+aparecieron de más. Una toma olvidada que se carga después con fecha anterior
+al recuento queda absorbida, porque ya estaba contada. La tarjeta del stock dice
+cuánto ajustaron los recuentos, y la tabla **Recuentos** los lista con lo que
+decía la cuenta, lo contado y la diferencia.
+
 ### Las reservas
 
 Cuarta colección: **reservas**, lo que se guarda aparte y no se toca —los

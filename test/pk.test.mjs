@@ -169,6 +169,19 @@ es('lo anterior al primer ingreso no cuenta', st[0].tomas.map((t) => t.id), ['t-
 es('se descuenta en unidades, con medios', st[0].consumido, 3.5);
 es('restantes', st[0].restantes, 86.5);
 es('la carga elegida a mano manda', [st[1].consumido, st[1].restantes], [3, 7]);
+es('sin recuentos no hay ajuste', [st[0].ajustado, st[0].recuentos], [0, []]);
+/* Recuentos sobre el de 150: hace 6 días quedaban 27 según la cuenta (30 − 3,
+   por t-1 y t-2), se contaron 25; hace 1,5 días (ya entraron 60) se contaron 84. */
+const rec = (id, dias, contadas) => ({ id, at: t0 - dias * pk.DIA, sustanciaId: 's-a', carga: 150, unidad: 'mg', contadas });
+const conRec = pk.stocks(ingresos, tomas, [rec('c-2', 1.5, 84), rec('c-1', 6, 25), { ...rec('c-x', 1, 10), carga: 999 }]);
+es('el recuento mide lo que decía la cuenta en ese momento', conRec[0].recuentos.map((r) => [r.id, r.antes, r.diferencia]), [['c-1', 27, -2], ['c-2', 85, -1]]);
+es('lo contado manda: después sigue contando desde ahí', conRec[0].restantes, 83.5);
+es('el ajuste total', conRec[0].ajustado, -3);
+es('un recuento de otra carga no toca este stock', conRec[1].recuentos, []);
+es('aparecer de más también vale: se suma', pk.stocks(ingresos, tomas, [rec('c-3', 0.5, 90)])[0].restantes, 90);
+es('una toma olvidada de antes del recuento queda absorbida',
+  pk.stocks(ingresos, [...tomas, toma('t-olv', 7, 150)], [rec('c-1', 6, 25)])[0].restantes,
+  pk.stocks(ingresos, tomas, [rec('c-1', 6, 25)])[0].restantes);
 const conCombo = pk.stocks([ing('i-z', 3, 's-z', 10, 30, 1)], [dc, { ...dz, at: t0 - pk.DIA }]);
 es('lo tomado en una combinación también descuenta', conCombo[0].consumido, 2);
 es('dosis diaria del esquema fijo', pk.dosisDiariaEsquema({ dosisHabitual: 200, esquema: { modo: 'fijo', tomasDia: 2 } }), 400);

@@ -615,6 +615,27 @@ app.whenReady().then(async () => {
   ok('y las 30 vuelven a la reserva', (await texto('.ap-reserva .ap-stock__cifra b')) === '30' && (await texto('#cuenta-reservas')) === '1');
   ok('el stock de 150 vuelve a 57', (await cifra150()) === '57');
 
+  /* Recuento: contar a mano y que la diferencia se reste. A las 23:59, igual
+     que las tomas de hoy, así ya cuentan como hechas cuando se contó. */
+  console.log('\n19b. Recuentos');
+  await click(`[data-stock="${armo}|150|mg"]`); await sleep(300);
+  ok('Recontar sigue al stock elegido', (await js(`document.querySelector('[data-action="recontar"]').dataset.arg`)) === `${armo}|150|mg`);
+  await click('[data-action="recontar"]'); await sleep(600);
+  ok('el diálogo de recuento abre y propone lo que dice la cuenta', (await js(`document.querySelector('#f-contadas')?.value`)) === '57');
+  await escribir('#f-momento-hora', '2359');
+  await escribir('#f-contadas', '55');
+  ok('dice cuánto decía la cuenta y cuánto resta', /decía 57.*se restan 2/.test(await texto('#f-total')), await texto('#f-total'));
+  await primario();
+  const recs = await js(`window.onyx.col('recuentos').list()`);
+  ok('el recuento quedó en disco con lo contado', recs.length === 1 && recs[0].contadas === 55 && recs[0].carga === 150, JSON.stringify(recs));
+  ok('el stock de 150 pasa a 55', (await cifra150()) === '55');
+  ok('la tarjeta dice cuánto ajustó', (await texto(`[data-stock="${armo}|150|mg"]`)).includes('−2 por recuento'));
+  ok('la tabla de recuentos lo lista', /Recuentos/.test(await texto('#view')) && (await cuenta('[data-menu="recuento"]')) === 1);
+  await click('[data-menu="recuento"]'); await sleep(300);
+  await menuItem('Eliminar');
+  await click('.ox-modal__foot .ox-btn--danger-solid'); await sleep(900);
+  ok('eliminar el recuento devuelve el stock a 57', (await cifra150()) === '57' && (await js(`window.onyx.col('recuentos').list()`)).length === 0);
+
   /* ── 20. Ningún anillo de foco se corta ─────────────────────────────────
      El anillo de base.css sale 3.5px por fuera del elemento. Si el elemento se
      ve entero pero esos 3.5px caen afuera de un contenedor que recorta (un

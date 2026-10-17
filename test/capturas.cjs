@@ -133,6 +133,12 @@ async function sembrar() {
     createdAt: ahora, updatedAt: ahora,
   });
 
+  /* Recuentos: el de 200 contado a mano, con dos comprimidos menos que la cuenta. */
+  await store.collection('recuentos').save({
+    id: 'c-0001', sustanciaId: 's-0001', carga: 200, unidad: 'mg', contadas: 99,
+    at: hoy0 - 2 * DIA + 21 * HORA, notas: 'Se cayeron dos atrás del escritorio.', createdAt: ahora, updatedAt: ahora,
+  });
+
   /* Hoy: un episodio en curso, con onset y pico pero sin fin. */
   const at = ahora - 3 * HORA - 12 * MIN;
   await guardar({
@@ -230,6 +236,11 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('[data-action="registrar-ingreso"]').click(); true`);
   await sleep(700);
   await foto('17-dialogo-ingreso');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await js(`document.querySelector('[data-action="recontar"]').click(); true`);
+  await sleep(700);
+  await foto('17b-dialogo-recuento');
   await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
   await sleep(400);
   await ir('reservas');

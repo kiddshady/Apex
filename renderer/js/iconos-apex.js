@@ -78,4 +78,7 @@ Icons.add({
   archivar: '<rect x="1.9" y="2.4" width="12.2" height="3.2" rx="1.1"/>'
           + '<path d="M3.2 5.6v6.5a1.4 1.4 0 0 0 1.4 1.4h6.8a1.4 1.4 0 0 0 1.4-1.4V5.6"/>'
           + '<path d="M6.5 8.5h3"/>',
+
+  /* Palitos de conteo tachados: el recuento, contar a mano lo que hay. */
+  recuento: '<path d="M3.6 3.2v9.6M6.2 3.2v9.6M8.8 3.2v9.6M11.4 3.2v9.6"/><path d="M1.9 11.2 13.6 4.8"/>',
 });

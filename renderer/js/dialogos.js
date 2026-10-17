@@ -21,7 +21,7 @@ import { fmtDosis, fmtHM, fmtOffset, fmtQty, fmtDiaSemana, plural } from './form
 import { campoMomento, cablearMomento } from './campo-fecha.js';
 import {
   FASES, faseInfo, ordenarHitos, MODOS_ESQUEMA, MAX_COMPONENTES,
-  esCombinacion, normalizarEsquema, esquemaDelDia, estadoReserva, envasesPara,
+  esCombinacion, normalizarEsquema, esquemaDelDia, estadoReserva, envasesPara, stocks, claveStock,
 } from './pk.js';
 import { UNIDADES, VIAS, PRESENTACIONES, pasoPara } from './vocab.js';
 import {
@@ -29,6 +29,7 @@ import {
   guardarSustancia, guardarDosis, borrarDosis, borrarSustancia, guardarAjustes,
   stocksActuales, ingreso as tomarIngreso, guardarIngreso, borrarIngreso, nombreSustancia,
   reserva as tomarReserva, guardarReserva, borrarReserva,
+  recuento as tomarRecuento, guardarRecuento, borrarRecuento,
 } from './tienda.js';
 import { segmentedHTML } from './vistas/comunes.js';
 
@@ -1027,6 +1028,161 @@ export function menuIngreso(id, { despues } = {}) {
     }) },
     { sep: true },
     { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(() => confirmarBorrarIngreso(id)) },
+  ];
+}
+
+/* ══ Recuentos ═══════════════════════════════════════════════════════════════
+   Contar a mano lo que hay de verdad. Se guarda lo contado, no la diferencia:
+   desde ese momento el stock vale eso (stocks(), en pk.js). El diálogo mide
+   en vivo cuánto decía la cuenta a esa hora, con la misma función que la
+   vista, así lo que promete es lo que después muestra. */
+
+/** Unidades con medio de resolución: 86,5 sí, 86,4999 no. */
+const unidadesTxt = (n) => fmtQty(Math.round(n * 100) / 100);
+const redondo = (n) => Math.round(n * 100) / 100;
+
+export async function dialogoRecuento({ clave = null, existente = null } = {}) {
+  const lista = stocksActuales();
+  if (!lista.length) {
+    Toast.show({ title: 'Primero, un ingreso', text: 'Se recuenta un stock: registrá antes lo que entró.', icon: 'stock' });
+    return null;
+  }
+  const clave0 = existente ? claveStock(existente) : clave;
+  const p0 = lista.find((p) => p.clave === clave0) || lista[0];
+  const pres = (p) => (p.ingresos[0]?.presentacion || 'unidades').toLowerCase();
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  body.innerHTML = `
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label">Stock</label>
+        ${selectHTML({ id: 'f-stock', placeholder: 'Elegir stock' })}
+      </div>
+      <div class="ox-field" style="width:170px">
+        <label class="ox-field__label" for="f-contadas">Cuántas contaste</label>
+        ${stepperHTML({ id: 'f-contadas', valor: existente?.contadas ?? redondo(Math.max(0, p0.restantes)), min: 0, step: 1 })}
+      </div>
+    </div>
+    ${campoMomento({ id: 'f-momento', label: 'Cuándo las contaste', ms: existente?.at ?? Date.now() })}
+    <div class="ap-aviso ap-aviso--total" id="f-total"></div>
+    <div class="ox-field">
+      <label class="ox-field__label" for="f-notas">Notas</label>
+      <textarea class="ox-textarea" id="f-notas" rows="2" placeholder="Se cayó uno, estaba mal contado el blíster…">${esc(existente?.notas || '')}</textarea>
+    </div>`;
+
+  const p = Modal.show({
+    title: existente ? 'Editar recuento' : 'Recontar',
+    sub: existente ? '' : 'Lo que contaste a mano pasa a ser el stock en ese momento. La diferencia con lo que decía la cuenta se resta, o se suma si aparecieron de más.',
+    body,
+    width: 560,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: existente ? 'Guardar' : 'Registrar recuento', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const contadas = body.querySelector('#f-contadas');
+  const total = body.querySelector('#f-total');
+  const otros = S.recuentos.filter((r) => r.id !== existente?.id);
+
+  const selS = bindSelect(body.querySelector('#f-stock'), lista.map((x) => ({
+    value: x.clave, label: `${nombreSustancia(x.sustanciaId)} · ${fmtDosis(x.carga, x.unidad)}`, icon: 'stock',
+  })), {
+    valor: p0.clave,
+    onChange: (v) => {
+      const x = lista.find((y) => y.clave === v);
+      contadas.value = redondo(Math.max(0, x.restantes));
+      validar();
+    },
+  });
+  const momento = cablearMomento(body, 'f-momento', () => validar());
+  bindStepper(contadas.closest('.ox-stepper'), () => validar());
+  contadas.addEventListener('input', () => validar());
+
+  /* Lo que el recuento haría, medido con stocks() sobre los demás recuentos
+     más este, provisorio. */
+  const medir = (x, n, at) => {
+    const prov = { id: '__prov', sustanciaId: x.sustanciaId, carga: x.carga, unidad: x.unidad, contadas: n, at };
+    const pool = stocks(S.ingresos, S.dosis, [...otros, prov]).find((y) => y.clave === x.clave);
+    return pool?.recuentos.find((r) => r.id === '__prov') || null;
+  };
+
+  const validar = () => {
+    const x = lista.find((y) => y.clave === selS.valor);
+    const n = numero(contadas.value);
+    const at = momento.leer();
+    const u = pres(x);
+    let msg;
+    let ok = false;
+    if (n == null || n < 0) msg = `Poné cuántas ${esc(u)} contaste.`;
+    else if (at == null) msg = 'Completá la fecha y la hora.';
+    else if (at < x.desde) msg = `El primer ingreso de este stock es del ${esc(fmtDiaSemana(x.desde))}: no se puede contar antes.`;
+    else {
+      ok = true;
+      const r = medir(x, n, at);
+      const dif = redondo(r.diferencia);
+      const decia = `En ese momento la cuenta decía <b>${esc(unidadesTxt(r.antes))}</b>`;
+      msg = dif < 0
+        ? `${decia}: se restan <b>${esc(unidadesTxt(-dif))}</b> y el stock queda en ${esc(unidadesTxt(n))}.`
+        : dif > 0
+          ? `${decia}: se suman <b>${esc(unidadesTxt(dif))}</b> que no figuraban y el stock queda en ${esc(unidadesTxt(n))}.`
+          : `${decia}, lo mismo que contaste: queda anotado, sin ajuste.`;
+    }
+    ponerTotal(total, Icons.svg('recuento'), msg);
+    if (primario) primario.disabled = !ok;
+  };
+  validar();
+  enterEnvia(body);
+  setTimeout(() => { contadas.focus(); contadas.select(); }, 80);
+
+  const ok = await p;
+  if (!ok) return null;
+  const x = lista.find((y) => y.clave === selS.valor);
+  const item = {
+    ...(existente || {}),
+    sustanciaId: x.sustanciaId,
+    carga: x.carga,
+    unidad: x.unidad,
+    contadas: numero(contadas.value),
+    at: momento.leer(),
+    notas: body.querySelector('#f-notas').value.trim(),
+  };
+  const dif = redondo(medir(x, item.contadas, item.at)?.diferencia || 0);
+  const saved = await attempt(() => guardarRecuento(item), { errorTitle: 'No se pudo guardar el recuento' });
+  if (saved) {
+    Toast.show({
+      title: existente ? 'Recuento actualizado' : 'Recuento registrado',
+      text: `${nombreSustancia(x.sustanciaId)} ${fmtDosis(x.carga, x.unidad)} · ${fmtQty(item.contadas)} ${pres(x)}`
+        + (dif ? ` (${dif < 0 ? '−' : '+'}${unidadesTxt(Math.abs(dif))})` : ''),
+      icon: 'recuento',
+    });
+  }
+  return saved;
+}
+
+export async function confirmarBorrarRecuento(id) {
+  const r = tomarRecuento(id);
+  if (!r) return false;
+  const ok = await Modal.confirm({
+    title: '¿Eliminar este recuento?',
+    sub: `${nombreSustancia(r.sustanciaId)} ${fmtDosis(r.carga, r.unidad)} · ${fmtQty(r.contadas)} contadas el ${fmtDiaSemana(r.at)}. El stock vuelve a calcularse sin él.`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return false;
+  const hecho = await attempt(async () => { await borrarRecuento(id); return true; }, { errorTitle: 'No se pudo eliminar el recuento' });
+  if (hecho) Toast.show({ title: 'Recuento eliminado', icon: 'trash' });
+  return !!hecho;
+}
+
+export function menuRecuento(id, { despues } = {}) {
+  const luego = (fn) => async () => { await fn(); despues?.(); };
+  return [
+    { label: 'Editar…', icon: 'edit', onSelect: luego(async () => { const r = tomarRecuento(id); if (r) await dialogoRecuento({ existente: r }); }) },
+    { sep: true },
+    { label: 'Eliminar', icon: 'trash', danger: true, onSelect: luego(() => confirmarBorrarRecuento(id)) },
   ];
 }
 

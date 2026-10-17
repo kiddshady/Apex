@@ -1,7 +1,7 @@
 /* Stock — lo que hay en casa: los ingresos (compras, entregas) menos lo que
-   se fue tomando desde entonces. Un stock por droga y dosis por unidad; la
-   marca y el envase no lo parten. Abajo, la calculadora de hasta cuándo
-   alcanza, siempre contada desde hoy. */
+   se fue tomando desde entonces, corregido por los recuentos a mano. Un stock
+   por droga y dosis por unidad; la marca y el envase no lo parten. Abajo, la
+   calculadora de hasta cuándo alcanza, siempre contada desde hoy. */
 
 import { Icons } from '../icons.js';
 import { paint, head, esc, empty } from '../ui.js';
@@ -14,6 +14,10 @@ import { kpi } from './comunes.js';
 
 export const BTN_INGRESO = `<button class="ox-btn ox-btn--primary ox-flashable" data-action="registrar-ingreso">
   ${Icons.svg('plus')} Registrar ingreso</button>`;
+
+/** Recontar arranca con el stock elegido en la calculadora. */
+const btnRecontar = (clave) => `<button class="ox-btn ox-btn--secondary ox-flashable" data-action="recontar" data-arg="${esc(clave || '')}"
+  data-tip="Anotar cuántas contaste a mano: la diferencia se resta del stock">${Icons.svg('recuento')} Recontar</button>`;
 
 /* De la sesión, no de los ajustes: qué stock mira la calculadora y la
    dosificación que se tipeó para cada uno. */
@@ -54,7 +58,7 @@ export function vistaStock() {
     sub: lista.length
       ? `${plural(lista.length, 'stock')} · ${plural(S.ingresos.length, 'ingreso')}`
       : 'Lo que tenés en casa, descontando las tomas',
-    actions: BTN_INGRESO,
+    actions: lista.length ? `${btnRecontar(elegido)}${BTN_INGRESO}` : BTN_INGRESO,
   }) + (lista.length ? `
     <div class="ox-scroll ox-grow">
       <div class="ap-kpis">
@@ -95,6 +99,13 @@ export function vistaStock() {
         </div>
         <div class="ox-card__body" style="padding-left:0;padding-right:0;padding-bottom:6px">${tablaIngresos()}</div>
       </div>
+      ${S.recuentos.length ? `<div class="ox-card ap-cardchart">
+        <div class="ox-card__head">
+          <span class="ox-subtitle">Recuentos</span>
+          <span class="ox-meta">${esc(plural(S.recuentos.length, 'recuento'))}: lo que se contó a mano y cuánto ajustó</span>
+        </div>
+        <div class="ox-card__body" style="padding-left:0;padding-right:0;padding-bottom:6px">${tablaRecuentos(lista)}</div>
+      </div>` : ''}
       <div style="height:24px"></div>
     </div>`
     : empty({
@@ -123,6 +134,8 @@ export function vistaStock() {
     campo.step = String(p.carga >= 1 ? p.carga / 2 : p.carga);
     unidadEl.textContent = p.unidad || '';
     document.querySelectorAll('#stocks .ap-stock').forEach((b) => b.classList.toggle('is-active', b.dataset.stock === elegido));
+    const rec = document.querySelector('[data-action="recontar"]');
+    if (rec) rec.dataset.arg = elegido;
     calcular();
   };
   const sel = bindSelect(document.getElementById('c-stock'), lista.map((p) => ({
@@ -163,8 +176,18 @@ function tarjeta(p, ahora) {
       <span class="ap-stock__cifra"><b>${esc(unidades(queda))}</b> ${esc(pres)}</span>
       <span class="ox-meter" style="--ox-pct:${pct.toFixed(1)}%"><span class="ox-meter__fill"></span></span>
       <span class="ap-stock__meta">de ${esc(unidades(p.ingresado))} ingresadas desde el ${esc(fmtDiaSemana(p.desde))}${marcas ? ` · ${esc(marcas)}` : ''}</span>
+      ${ajuste(p)}
       <span class="ap-stock__meta">${esc(nota)}</span>
     </button>`;
+}
+
+/** «−3 por recuentos · último el sáb 17/10»: lo que ajustó contar a mano. */
+function ajuste(p) {
+  if (!p.recuentos.length) return '';
+  const ult = p.recuentos[p.recuentos.length - 1];
+  const a = Math.round(p.ajustado * 100) / 100;
+  const cuanto = a ? `${a < 0 ? '−' : '+'}${unidades(Math.abs(a))} por ${p.recuentos.length === 1 ? 'recuento' : 'recuentos'}` : 'recontado, sin diferencia';
+  return `<span class="ap-stock__meta">${esc(cuanto)} · ${p.recuentos.length === 1 ? 'el' : 'último el'} ${esc(fmtDiaSemana(ult.at))}</span>`;
 }
 
 /** «1 unidad por día · alcanza para 90 días: hasta el …», y los otros dos
@@ -221,6 +244,34 @@ function ponerResultado(res, lineas) {
     if (l.k === 'main') valor(el, l.html);
     else frase(el, l.html);
   }
+}
+
+/** Cada recuento con lo que decía la cuenta y cuánto ajustó. La diferencia
+    sale de los stocks ya calculados, no del disco: se mide, no se guarda. */
+function tablaRecuentos(lista) {
+  const medidos = new Map(lista.flatMap((p) => p.recuentos.map((r) => [r.id, r])));
+  const fila = (r) => {
+    const m = medidos.get(r.id);
+    const dif = m ? Math.round(m.diferencia * 100) / 100 : null;
+    return `<tr class="ox-tr">
+      <td>${esc(fmtDiaSemana(r.at))} ${esc(fmtHM(r.at))}</td>
+      <td>${esc(nombreSustancia(r.sustanciaId))}</td>
+      <td class="ox-td--num">${esc(fmtDosis(r.carga, r.unidad))}</td>
+      <td class="ox-td--num">${m ? esc(unidades(m.antes)) : '—'}</td>
+      <td class="ox-td--num"><b>${esc(unidades(r.contadas))}</b></td>
+      <td class="ox-td--num">${dif == null ? '—' : dif ? `${dif < 0 ? '−' : '+'}${esc(unidades(Math.abs(dif)))}` : '0'}</td>
+      <td>${esc(r.notas || '')}</td>
+      <td class="ox-td--tight"><div class="ox-rowactions">
+        <button class="ox-iconbtn ox-iconbtn--sm" data-menu="recuento" data-menu-arg="${esc(r.id)}" data-tip="Más">${Icons.svg('more')}</button></div></td>
+    </tr>`;
+  };
+  return `<table class="ox-table">
+    <thead><tr>
+      <th>Fecha</th><th>Droga</th><th class="ox-td--num">Dosis</th><th class="ox-td--num">Decía</th>
+      <th class="ox-td--num">Contadas</th><th class="ox-td--num">Diferencia</th><th>Notas</th><th></th>
+    </tr></thead>
+    <tbody>${S.recuentos.map(fila).join('')}</tbody>
+  </table>`;
 }
 
 function tablaIngresos() {
