@@ -5,7 +5,7 @@ import { Icons } from '../icons.js';
 import Router from '../router.js';
 import { paint, head, esc, attempt } from '../ui.js';
 import { Toast } from '../overlays.js';
-import { bindSwitcher, frase } from '../motion.js';
+import { bindSwitcher, frase, roll } from '../motion.js';
 import { RANGOS } from '../pk.js';
 import { UNIDADES } from '../vocab.js';
 import { S, apex, guardarAjustes, setContexto } from '../tienda.js';
@@ -131,13 +131,25 @@ export function vistaAjustes() {
   });
 
   /* Actualizaciones: el estado se repinta con cada aviso del principal, y el
-     oyente se suelta al navegar. La frase: el porcentaje destella en su lugar
-     y un cambio de fase hace relevo (antes, textContent en seco). El botón de
+     oyente se suelta al navegar. La frase: un cambio de fase hace relevo
+     (antes, textContent en seco); durante la descarga el porcentaje corre
+     suave (roll) y sin destello. Destellaba en cada aviso, varias veces por
+     segundo, y cada destello arrancaba antes de que terminara el anterior: el
+     número se prendía y apagaba sin parar, como un bug. El botón de
      instalar se pliega a lo ancho (.ox-plegable--ancho): con alternar() solo
      se fundía, y «Ver versiones en GitHub», a su derecha, saltaba al aparecer
      y otra vez al terminar de irse. */
   const pintarUpd = (e) => {
-    frase(document.getElementById('upd-estado'), esc(describirEstado(e)));
+    const estadoEl = document.getElementById('upd-estado');
+    if (estadoEl && e.fase === 'descargando') {
+      roll(estadoEl, e.progreso || 0, (p) =>
+        frase(estadoEl, esc(describirEstado({ ...e, progreso: p })), { destello: false }));
+    } else if (estadoEl) {
+      // Fuera de la descarga la carrera se corta: si no, un cuadro que
+      // quedaba en vuelo volvía a escribir «Descargando…» sobre la fase nueva.
+      if (estadoEl.__roll) { cancelAnimationFrame(estadoEl.__roll.raf); estadoEl.__roll = null; }
+      frase(estadoEl, esc(describirEstado(e)));
+    }
     const instalar = document.getElementById('btn-instalar-upd');
     if (instalar) instalar.hidden = e.fase !== 'listo';
     const buscar = document.getElementById('btn-buscar-upd');

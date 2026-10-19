@@ -803,10 +803,26 @@ app.whenReady().then(async () => {
   const medidor = await js(`(() => { const m = document.querySelector('#stat-update > .ox-meter');
     return { habia: !!window.__medidor, mismo: !!m && m === window.__medidor, pct: m?.style.getPropertyValue('--ox-pct'),
       viaja: !!m && m.querySelector('.ox-meter__fill').getAnimations().length > 0 }; })()`);
+  /* El % de Ajustes corre suave y sin destello: destellaba en cada aviso y,
+     varias veces por segundo, se prendía y apagaba sin parar. */
+  await sleep(500);
+  win.webContents.send('actualizacion:estado', { fase: 'descargando', nueva: '9.9.9', progreso: 80, manual: false });
+  const pctAjustes = await js(`(async () => {
+    const el = document.getElementById('upd-estado');
+    const vistos = []; let destello = false; const t0 = performance.now();
+    while (performance.now() - t0 < 600) {
+      const m = el?.textContent.match(/: (\\d+) %/); if (m) vistos.push(+m[1]);
+      if (el?.classList.contains('ox-ticked')) destello = true;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return { vistos: [...new Set(vistos)], destello, dice: el?.textContent };
+  })()`);
   win.webContents.send('actualizacion:estado', { fase: 'inactivo', motivo: 'dev', manual: false });
   await sleep(500);
   ok('la barra de descarga es la misma de un aviso al otro', medidor.habia && medidor.mismo && medidor.pct === '40%', JSON.stringify(medidor));
   ok('y avanza con su transición', medidor.viaja, JSON.stringify(medidor));
+  ok('el % de Ajustes corre de a poco hasta el nuevo, sin destello',
+    !pctAjustes.destello && pctAjustes.vistos.some((v) => v > 40 && v < 80) && pctAjustes.vistos.at(-1) === 80, JSON.stringify(pctAjustes));
 
   /* La calculadora de stock: el renglón principal se reescribe en su lugar
      (el mismo nodo) en cada cambio de la dosificación. */
