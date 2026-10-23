@@ -184,7 +184,7 @@ app.whenReady().then(async () => {
   ok('la duración aparece en la cabecera', (await texto('.ap-cardchart .ox-card__head')).includes('duró 5 h'));
 
   console.log('\n5. Todas las vistas montan');
-  for (const v of ['registro', 'sustancias', 'stock', 'reservas', 'graficos', 'piezas', 'ajustes', 'inicio']) {
+  for (const v of ['esquema', 'registro', 'sustancias', 'stock', 'reservas', 'graficos', 'piezas', 'ajustes', 'inicio']) {
     await click(`[data-view="${v}"]`);
     await sleep(700);
     const hijos = await js(`document.getElementById('view').children.length`);
@@ -490,6 +490,76 @@ app.whenReady().then(async () => {
   await sleep(700);
   ok('la toma de la combinación completa el esquema del componente', (await texto('.ap-esq .ap-esq__estado')) === '2 de 2'
     && await existe('.ap-esq.is-completo'));
+
+  console.log('\n17-bis. La pestaña Esquema');
+  await click('[data-view="esquema"]');
+  await sleep(800);
+  ok('el rail cuenta lo que está en el esquema', (await texto('#cuenta-esquema')) === '1', await texto('#cuenta-esquema'));
+  ok('el modafinilo está en la tabla de todos los días', await existe(`#esq-fijos [data-esq="${sust.id}"]`));
+  ok('con su total diario', (await texto(`[data-esq="${sust.id}"] b`)) === '400 mg', await texto(`[data-esq="${sust.id}"] b`));
+  ok('y cómo va hoy', (await texto(`[data-esq="${sust.id}"] .ap-esq__estado`)) === '2 de 2');
+  ok('la combinación no entra al esquema', (await cuenta('[data-esq]')) === 1);
+
+  await click('[data-action="agregar-esquema"]');
+  await sleep(600);
+  ok('agregar abre el diálogo con el selector', await existe('.ox-modal #e-sust'));
+  const propuesta = await texto('#e-sust .ox-select__value');
+  ok('propone una que todavía no está', propuesta && propuesta !== 'Modafinilo', propuesta);
+  await tap('#e-sust'); await sleep(300); await menuItem('Modafinilo');
+  ok('elegir una que ya está avisa que la reemplaza', (await texto('#e-ya'))?.includes('Ya está en el esquema'), await texto('#e-ya'));
+  ok('y trae su esquema', (await js(`document.querySelector('#e-tomas').value`)) === '2');
+  await tap('#e-sust'); await sleep(300); await menuItem('Armodafinilo');
+  ok('otra trae su unidad y su dosis', (await texto('#e-unidad')) === 'mg' && (await js(`document.querySelector('#e-dosis').value`)) === '150');
+  await click('#e-modo [data-value="demanda"]');
+  await sleep(300);
+  ok('a demanda apaga las veces por día', await existe('#e-tomas-campo.is-off'));
+  await escribir('#e-dosis', '150');
+  await escribir('#e-cuando', 'si hay guardia');
+  ok('el resumen lo dice', (await texto('#e-total'))?.includes('A demanda: 150 mg'), await texto('#e-total'));
+  await primario();
+  let armoEsq = await js(`window.__apex.S.sustancias.find(s => s.nombre === 'Armodafinilo')`);
+  ok('quedó en disco con su esquema y el cuándo', JSON.stringify(armoEsq?.esquema) === JSON.stringify({ modo: 'demanda', tomasDia: null, min: null, max: null, cuando: 'si hay guardia' }), JSON.stringify(armoEsq?.esquema));
+  ok('la dosis por toma pasó a ser la habitual', armoEsq?.dosisHabitual === 150);
+  ok('la tabla de a demanda aparece con su fila', await existe(`#esq-demanda [data-esq="${armoEsq.id}"]`));
+  ok('el rail cuenta dos', (await texto('#cuenta-esquema')) === '2');
+
+  await click(`[data-esq="${sust.id}"]`);
+  await sleep(600);
+  ok('click en la fila abre la edición, sin selector', await existe('.ox-modal #e-modo') && !(await existe('.ox-modal #e-sust')));
+  ok('trae lo que tenía', (await js(`document.querySelector('#e-tomas').value`)) === '2' && (await js(`document.querySelector('#e-dosis').value`)) === '200');
+  await escribir('#e-tomas', '3');
+  await escribir('#e-cuando', '8, 14 y 20 h');
+  ok('el resumen hace la cuenta del día', (await texto('#e-total'))?.includes('3 × 200 mg = 600 mg'), await texto('#e-total'));
+  await primario();
+  modaf = await js(`window.onyx.col('sustancias').get(${JSON.stringify(sust.id)})`);
+  ok('la edición quedó en disco', modaf?.esquema?.tomasDia === 3 && modaf.esquema.cuando === '8, 14 y 20 h' && modaf.esquema.min === 200, JSON.stringify(modaf?.esquema));
+  ok('la tabla se puso al día', (await texto(`[data-esq="${sust.id}"] b`)) === '600 mg' && (await texto(`[data-esq="${sust.id}"] .ap-esq__estado`)) === '2 de 3');
+
+  await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
+  await sleep(700);
+  await click('#btn-editar');
+  await sleep(600);
+  await primario();
+  modaf = await js(`window.onyx.col('sustancias').get(${JSON.stringify(sust.id)})`);
+  ok('editar la sustancia no le borra el cuándo', modaf?.esquema?.cuando === '8, 14 y 20 h', JSON.stringify(modaf?.esquema));
+
+  await click('[data-view="esquema"]');
+  await sleep(700);
+  await tap(`[data-menu="esquema"][data-menu-arg="${armoEsq.id}"]`);
+  await sleep(400);
+  await menuItem('Quitar del esquema');
+  armoEsq = await js(`window.onyx.col('sustancias').get(${JSON.stringify(armoEsq.id)})`);
+  ok('quitar del esquema no borra la sustancia', armoEsq && armoEsq.esquema === null);
+  await sleep(500);
+  ok('y la fila se va', !(await existe(`[data-esq="${armoEsq.id}"]`)) && (await texto('#cuenta-esquema')) === '1');
+  const deshacer = await click('.ox-toast__action');
+  await sleep(800);
+  armoEsq = await js(`window.onyx.col('sustancias').get(${JSON.stringify(armoEsq.id)})`);
+  ok('deshacer la devuelve igual', deshacer && armoEsq?.esquema?.cuando === 'si hay guardia', JSON.stringify(armoEsq?.esquema));
+  ok('y vuelve a la tabla', await existe(`[data-esq="${armoEsq.id}"]`));
+  const textoEsq = await js(`import('./js/vistas/esquema.js').then(m => m.textoDelEsquema())`);
+  ok('el texto para copiar tiene las dos secciones', /Todos los días\n- Modafinilo 200 mg, 3 veces por día \(600 mg por día\) · rango 200–400 mg · 8, 14 y 20 h/.test(textoEsq)
+    && /A demanda\n- Armodafinilo 150 mg por toma · si hay guardia/.test(textoEsq), JSON.stringify(textoEsq));
 
   await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
   await sleep(700);

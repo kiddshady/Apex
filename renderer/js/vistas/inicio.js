@@ -44,7 +44,9 @@ export function vistaInicio() {
       ${esquema.length ? `
         <div class="ox-section">
           <div class="ox-section__head"><span class="ox-section__title">Esquema de hoy</span>
-            <span class="ox-meta">cuenta también lo tomado dentro de combinaciones</span></div>
+            <span class="ox-meta">cuenta también lo tomado dentro de combinaciones</span>
+            <span class="ox-spacer"></span>
+            <button class="ox-btn ox-btn--ghost ox-btn--sm" data-goto="esquema">Ver el esquema ${Icons.svg('chevronRight')}</button></div>
           <div class="ox-list">${esquema.map(filaEsquema).join('')}</div>
         </div>` : ''}
 

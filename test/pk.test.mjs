@@ -131,6 +131,8 @@ console.log('\n9. Esquema');
 es('un rango al revés se endereza', pk.normalizarEsquema(zolpi.esquema), { modo: 'fijo', tomasDia: 1, min: 10, max: 20 });
 es('a demanda no lleva tomas por día', pk.normalizarEsquema({ modo: 'demanda', tomasDia: 3, min: 150, max: '' }), { modo: 'demanda', tomasDia: null, min: 150, max: null });
 es('un modo desconocido no es esquema', pk.normalizarEsquema({ modo: 'zzz' }), null);
+es('el cuándo se guarda limpio', pk.normalizarEsquema({ modo: 'fijo', tomasDia: 2, cuando: '  8 y   20 h ' }), { modo: 'fijo', tomasDia: 2, min: null, max: null, cuando: '8 y 20 h' });
+es('un cuándo vacío no aparece', pk.normalizarEsquema({ modo: 'demanda', cuando: '   ' }), { modo: 'demanda', tomasDia: null, min: null, max: null });
 es('sin esquema no hay día', pk.esquemaDelDia({ id: 's-1', unidad: 'mg' }, [d1], t0), null);
 const dia = pk.esquemaDelDia(zolpi, [dc, dz], t0 + 9 * HORA);
 es('la toma de la combinación cumple el fijo del componente', [dia.hechas, dia.completo, dia.total], [1, true, 10]);

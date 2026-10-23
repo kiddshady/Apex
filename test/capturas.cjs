@@ -43,8 +43,8 @@ async function sembrar() {
   const S3 = { id: 's-0003', nombre: 'Melatonina', unidad: 'mg', dosisHabitual: 3, via: 'sublingual', vidaMedia: null, notas: '', createdAt: ahora - 60 * DIA, updatedAt: ahora - 60 * DIA };
   /* El esquema de base y una combinación, para ver Hoy y el perfil de una mezcla. */
   S1.esquema = { modo: 'demanda', tomasDia: null, min: 200, max: 400 };
-  const S4 = { id: 's-0004', nombre: 'Lamotrigina', unidad: 'mg', dosisHabitual: 200, via: 'oral', vidaMedia: 29, notas: '', esquema: { modo: 'fijo', tomasDia: 2, min: null, max: null }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
-  const S5 = { id: 's-0005', nombre: 'Zolpidem', unidad: 'mg', dosisHabitual: 10, via: 'oral', vidaMedia: 2.5, notas: '', esquema: { modo: 'fijo', tomasDia: 1, min: 10, max: 20 }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
+  const S4 = { id: 's-0004', nombre: 'Lamotrigina', unidad: 'mg', dosisHabitual: 200, via: 'oral', vidaMedia: 29, notas: '', esquema: { modo: 'fijo', tomasDia: 2, min: null, max: null, cuando: '8 y 20 h' }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
+  const S5 = { id: 's-0005', nombre: 'Zolpidem', unidad: 'mg', dosisHabitual: 10, via: 'oral', vidaMedia: 2.5, notas: '', esquema: { modo: 'fijo', tomasDia: 1, min: 10, max: 20, cuando: 'a la noche' }, createdAt: ahora - 90 * DIA, updatedAt: ahora - 90 * DIA };
   const S6 = { id: 's-0006', nombre: 'Midazolam', unidad: 'mg', dosisHabitual: 7.5, via: 'oral', vidaMedia: 2, notas: '', createdAt: ahora - 40 * DIA, updatedAt: ahora - 40 * DIA };
   const S7 = { id: 's-0007', nombre: 'Zolpidem + Midazolam', unidad: null, dosisHabitual: null, via: 'oral', vidaMedia: null, notas: '',
     componentes: [{ sustanciaId: 's-0005', cantidad: 10 }, { sustanciaId: 's-0006', cantidad: 7.5 }], createdAt: ahora - 30 * DIA, updatedAt: ahora - 30 * DIA };
@@ -178,6 +178,18 @@ app.whenReady().then(async () => {
   };
 
   await foto('01-hoy');
+  await ir('esquema');
+  await foto('01b-esquema');
+  await js(`document.querySelector('[data-esq="s-0004"]').click(); true`);
+  await sleep(700);
+  await foto('01c-esquema-editar');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
+  await js(`document.querySelector('[data-action="agregar-esquema"]').click(); true`);
+  await sleep(700);
+  await foto('01d-esquema-agregar');
+  await js(`document.querySelector('.ox-modal [data-dismiss]').click(); true`);
+  await sleep(400);
   await ir('registro');
   await foto('02-registro');
   /* Los ajustes se cambian en el espejo en memoria, que es lo que lee la

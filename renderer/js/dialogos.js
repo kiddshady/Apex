@@ -238,6 +238,7 @@ export async function dialogoSustancia(existente = null) {
       tomasDia: numero(body.querySelector('#f-tomas').value),
       min: numero(body.querySelector('#f-min').value),
       max: numero(body.querySelector('#f-max').value),
+      cuando: esq0?.cuando,   // se edita en la vista Esquema; acá solo se conserva
     }),
     notas: body.querySelector('#f-notas').value.trim(),
   };
@@ -246,6 +247,232 @@ export async function dialogoSustancia(existente = null) {
     Toast.show({ title: existente ? 'Sustancia actualizada' : 'Sustancia creada', text: saved.nombre, icon: 'pill' });
   }
   return saved;
+}
+
+/* ══ Esquema ═════════════════════════════════════════════════════════════════
+   El esquema de UNA sustancia sin el resto de su ficha: lo que abre la vista
+   Esquema para agregar o editar. La dosis por toma ES la dosis habitual de la
+   sustancia (la que propone el registro): editarla acá la cambia allá, porque
+   tener dos números para lo mismo es la forma segura de que no coincidan. */
+
+/** Lo que el formulario muestra de una sustancia: su esquema, o lo de fábrica. */
+function valoresEsquema(s) {
+  const e = normalizarEsquema(s?.esquema);
+  return {
+    modo: e?.modo || 'fijo',
+    dosis: s?.dosisHabitual ?? '',
+    tomas: e?.tomasDia ?? 1,
+    cuando: e?.cuando || '',
+    min: e?.min ?? '',
+    max: e?.max ?? '',
+  };
+}
+
+/**
+ * dialogoEsquema({ sustanciaId, editar })
+ * Con `editar`, la sustancia queda fija; si no, se elige (o se crea con
+ * «Nueva sustancia…», que cierra este diálogo, abre el otro y vuelve).
+ */
+export async function dialogoEsquema({ sustanciaId = null, editar = false } = {}) {
+  const estado = { sustanciaId, valores: null };
+  for (;;) {
+    const res = await formularioEsquema(estado, editar);
+    if (res === 'nueva') {
+      const s = await dialogoSustancia();
+      if (s) { estado.sustanciaId = s.id; estado.valores = null; }
+      else if (!activas().some((x) => !esCombinacion(x))) return null;
+      continue;
+    }
+    return res;
+  }
+}
+
+async function formularioEsquema(estado, editar) {
+  const opciones = activas().filter((s) => !esCombinacion(s));
+  if (!opciones.length && !editar) return 'nueva';
+  // Para agregar, la primera propuesta es una que todavía no esté.
+  const s0 = sustancia(estado.sustanciaId)
+    || opciones.find((s) => !normalizarEsquema(s.esquema)) || opciones[0];
+  const v0 = estado.valores || valoresEsquema(s0);
+  const yaEstaba0 = !!normalizarEsquema(s0?.esquema);
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  body.innerHTML = `
+    ${editar ? '' : `<div class="ox-field">
+      <label class="ox-field__label">Fármaco</label>
+      ${selectHTML({ id: 'e-sust', placeholder: 'Elegir sustancia' })}
+      <span class="ox-field__hint" id="e-ya"></span>
+    </div>`}
+    <div class="ox-field">
+      <label class="ox-field__label">Frecuencia</label>
+      ${segmentedHTML('e-modo', MODOS_ESQUEMA, v0.modo)}
+    </div>
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="e-dosis">Dosis por toma</label>
+        <div class="ox-row" style="gap:10px">
+          ${stepperHTML({ id: 'e-dosis', valor: v0.dosis, step: pasoPara(v0.dosis), placeholder: '200', extra: 'style="flex:1 1 auto"' })}
+          <span class="ox-label ox-mono" id="e-unidad" style="min-width:32px">${esc(s0?.unidad || '')}</span>
+        </div>
+      </div>
+      <div class="ox-field ap-apagable${v0.modo === 'demanda' ? ' is-off' : ''}" id="e-tomas-campo" style="width:170px">
+        <label class="ox-field__label" for="e-tomas">Veces por día</label>
+        ${stepperHTML({ id: 'e-tomas', valor: v0.tomas, min: 1, step: 1, placeholder: '1' })}
+      </div>
+    </div>
+    <div class="ox-field">
+      <label class="ox-field__label" for="e-cuando">Cuándo</label>
+      <input class="ox-input" id="e-cuando" maxlength="120" placeholder="8 y 20 h · con el desayuno · si no duermo" spellcheck="false" autocomplete="off" value="${esc(v0.cuando)}">
+    </div>
+    <div class="ox-field">
+      <label class="ox-field__label" for="e-min">Rango por toma</label>
+      <div class="ox-row" style="gap:8px">
+        <input class="ox-input ox-input--mono" type="number" id="e-min" min="0" placeholder="mín." value="${esc(v0.min)}">
+        <span class="ox-meta">a</span>
+        <input class="ox-input ox-input--mono" type="number" id="e-max" min="0" placeholder="máx." value="${esc(v0.max)}">
+        <span class="ox-label ox-mono" id="e-unidad-r" style="min-width:40px">${esc(s0?.unidad || '')}</span>
+      </div>
+      <span class="ox-field__hint">Opcional y de referencia: una toma fuera del rango se registra igual.</span>
+    </div>
+    <div class="ap-aviso ap-aviso--total" id="e-total"></div>`;
+
+  const p = Modal.show({
+    title: editar ? `Esquema de ${s0?.nombre || ''}` : 'Agregar al esquema',
+    sub: editar ? '' : 'Qué tomás de base, cuánto por toma y cuántas veces. La dosis por toma pasa a ser la habitual del registro.',
+    body,
+    width: 560,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: editar || yaEstaba0 ? 'Guardar' : 'Agregar', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const $ = (id) => body.querySelector(`#${id}`);
+  const dosisEl = $('e-dosis');
+  const tomasEl = $('e-tomas');
+  const total = $('e-total');
+  let modo = v0.modo;
+  let actual = s0;
+
+  const leer = () => ({
+    modo,
+    dosis: dosisEl.value,
+    tomas: tomasEl.value,
+    cuando: $('e-cuando').value,
+    min: $('e-min').value,
+    max: $('e-max').value,
+  });
+
+  /* El renglón de abajo dice lo que el esquema significa en un día, con la
+     misma cuenta que usa Stock (dosisDiariaEsquema: veces × dosis por toma). */
+  const resumir = () => {
+    const u = actual?.unidad || '';
+    const d = numero(dosisEl.value);
+    const n = Math.max(1, Math.round(numero(tomasEl.value) || 1));
+    let msg;
+    if (!actual) msg = 'Elegí qué fármaco va al esquema.';
+    else if (modo === 'demanda') msg = d > 0 ? `A demanda: ${esc(fmtDosis(d, u))} cada vez que la tomes.` : 'A demanda: sin una dosis diaria fija.';
+    else if (d > 0) msg = n === 1 ? `Por día: <b>${esc(fmtDosis(d, u))}</b>, una vez.` : `Por día: ${n} × ${esc(fmtDosis(d, u))} = <b>${esc(fmtDosis(d * n, u))}</b>.`;
+    else msg = `${esc(plural(n, 'toma'))} por día. Con la dosis por toma, sale el total.`;
+    ponerTotal(total, Icons.svg('esquema'), msg);
+  };
+
+  const validar = () => { if (primario) primario.disabled = !actual; };
+
+  const pintarValores = (v) => {
+    dosisEl.value = v.dosis;
+    dosisEl.step = pasoPara(v.dosis);
+    tomasEl.value = v.tomas;
+    $('e-cuando').value = v.cuando;
+    $('e-min').value = v.min;
+    $('e-max').value = v.max;
+    if (v.modo !== modo) $('e-modo').querySelector(`[data-value="${v.modo}"]`)?.click();
+  };
+
+  const avisoYa = (s) => {
+    const ya = $('e-ya');
+    if (ya) frase(ya, s && normalizarEsquema(s.esquema) ? 'Ya está en el esquema: guardar reemplaza lo que tenía.' : '');
+  };
+
+  bindSwitcher($('e-modo'), (v) => {
+    modo = v;
+    $('e-tomas-campo').classList.toggle('is-off', v === 'demanda');
+    tomasEl.disabled = v === 'demanda';
+    resumir();
+  });
+  tomasEl.disabled = modo === 'demanda';
+  body.querySelectorAll('.ox-stepper').forEach((st) => bindStepper(st, resumir));
+  dosisEl.addEventListener('input', resumir);
+  tomasEl.addEventListener('input', resumir);
+  dosisEl.addEventListener('change', () => { dosisEl.step = pasoPara(dosisEl.value); });
+
+  if (!editar) {
+    bindSelect($('e-sust'), [
+      ...opciones.map((s) => ({ value: s.id, label: s.nombre, icon: normalizarEsquema(s.esquema) ? 'esquema' : 'pill' })),
+      { sep: true },
+      { value: '__nueva', label: 'Nueva sustancia…', icon: 'plus', siempre: true },
+    ], {
+      valor: s0?.id || null,
+      onChange: (v) => {
+        if (v === '__nueva') { estado.valores = leer(); Modal.close('nueva'); return; }
+        const s = sustancia(v);
+        if (!s) return;
+        actual = s;
+        estado.sustanciaId = s.id;
+        frase($('e-unidad'), esc(s.unidad || ''));
+        frase($('e-unidad-r'), esc(s.unidad || ''));
+        pintarValores(valoresEsquema(s));
+        avisoYa(s);
+        resumir();
+        validar();
+      },
+    });
+    avisoYa(s0);
+  }
+  resumir();
+  validar();
+  enterEnvia(body);
+  setTimeout(() => dosisEl.focus(), 80);
+
+  const res = await p;
+  if (res === 'nueva') return 'nueva';
+  if (res !== true || !actual) return null;
+
+  const v = leer();
+  const yaEstaba = !!normalizarEsquema(actual.esquema);
+  const item = {
+    ...actual,
+    dosisHabitual: numero(v.dosis),
+    esquema: normalizarEsquema({ modo: v.modo, tomasDia: numero(v.tomas), min: numero(v.min), max: numero(v.max), cuando: v.cuando }),
+  };
+  const saved = await attempt(() => guardarSustancia(item), { errorTitle: 'No se pudo guardar el esquema' });
+  if (saved) Toast.show({ title: yaEstaba ? 'Esquema actualizado' : 'Agregada al esquema', text: saved.nombre, icon: 'esquema' });
+  return saved;
+}
+
+/** Quitar una sustancia del esquema no la borra: sigue en Sustancias, con sus
+    tomas, solo que sin esquema. Sin confirmación, con deshacer en el aviso. */
+export async function quitarDelEsquema(id) {
+  const s = sustancia(id);
+  if (!s?.esquema) return false;
+  const antes = s.esquema;
+  const saved = await attempt(() => guardarSustancia({ ...s, esquema: null }), { errorTitle: 'No se pudo quitar del esquema' });
+  if (!saved) return false;
+  Toast.show({
+    title: 'Quitada del esquema',
+    text: `${s.nombre} sigue en Sustancias, con sus tomas.`,
+    icon: 'esquema',
+    action: {
+      label: 'Deshacer',
+      run: async () => {
+        const ahora = sustancia(id);
+        if (ahora && await attempt(() => guardarSustancia({ ...ahora, esquema: antes }), { errorTitle: 'No se pudo deshacer' })) Router.refresh();
+      },
+    },
+  });
+  return true;
 }
 
 /* ══ Toma ════════════════════════════════════════════════════════════════════ */
@@ -1473,5 +1700,17 @@ export function menuSustancia(id, { despues } = {}) {
       const borrada = await confirmarBorrarSustancia(id);
       if (borrada && Router.name === 'sustancia' && Router.param === id) Router.go('sustancias');
     }) },
+  ];
+}
+
+/** El menú de una fila de la vista Esquema. */
+export function menuEsquema(id, { despues } = {}) {
+  const luego = (fn) => async () => { if (await fn()) despues?.(); };
+  return [
+    { label: 'Editar…', icon: 'edit', onSelect: luego(() => dialogoEsquema({ sustanciaId: id, editar: true })) },
+    { label: 'Registrar dosis…', icon: 'gota', onSelect: luego(() => dialogoDosis({ sustanciaId: id })) },
+    { label: 'Abrir su perfil', icon: 'external', onSelect: () => Router.go('sustancia', id) },
+    { sep: true },
+    { label: 'Quitar del esquema', icon: 'close', onSelect: luego(() => quitarDelEsquema(id)) },
   ];
 }

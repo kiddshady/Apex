@@ -59,6 +59,8 @@ export const sustancia = (id) => S.sustancias.find((s) => s.id === id) || null;
 export const dosis = (id) => S.dosis.find((d) => d.id === id) || null;
 export const dosisDe = (sustanciaId) => S.dosis.filter((d) => d.sustanciaId === sustanciaId);
 export const activas = () => S.sustancias.filter((s) => !s.archivada);
+/** Las sustancias activas que tienen esquema: la vista Esquema y su contador. */
+export const delEsquema = () => activas().filter((s) => !esCombinacion(s) && normalizarEsquema(s.esquema));
 
 export function nombreSustancia(id) {
   return sustancia(id)?.nombre || 'Sustancia eliminada';
@@ -79,7 +81,7 @@ export function habitualSustancia(s) {
   return Number(s?.dosisHabitual) > 0 ? fmtDosis(s.dosisHabitual, s.unidad) : '';
 }
 
-/** «Fijo · 2 por día · 150–300 mg por toma» · «A demanda · desde 200 mg» */
+/** «Fijo · 2 por día · 150–300 mg por toma · 8 y 20 h» · «A demanda · desde 200 mg» */
 export function textoEsquema(s) {
   const e = normalizarEsquema(s?.esquema);
   if (!e) return '';
@@ -90,6 +92,7 @@ export function textoEsquema(s) {
   return [
     e.modo === 'fijo' ? `Fijo · ${e.tomasDia === 1 ? '1 por día' : `${e.tomasDia} por día`}` : 'A demanda',
     rango ? `${rango} por toma` : null,
+    e.cuando || null,
   ].filter(Boolean).join(' · ');
 }
 
@@ -220,6 +223,7 @@ const set = (id, valor) => numero(document.getElementById(id), valor);
 export function pintarChrome() {
   set('cuenta-dosis', S.dosis.length);
   set('cuenta-sustancias', activas().length);
+  set('cuenta-esquema', delEsquema().length);
   set('cuenta-stock', stocksActuales().filter((p) => p.restantes > 0).length);
   set('cuenta-reservas', reservasVigentes().length);
   set('stat-dosis', S.dosis.length);

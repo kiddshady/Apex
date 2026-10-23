@@ -344,8 +344,9 @@ export function aportesDe(sustanciaId, dosis) {
 
 /* ── Esquema ─────────────────────────────────────────────────────────────────
    La medicación de base: una sustancia puede tener un esquema fijo (N tomas
-   por día) o a demanda, y un rango por toma opcional. El rango es un dato, no
-   un límite: Apex no bloquea ni advierte una toma fuera de él. */
+   por día) o a demanda, un rango por toma opcional y un «cuándo» en texto
+   libre («8 y 20 h», «si no duermo»). El rango es un dato, no un límite: Apex
+   no bloquea ni advierte una toma fuera de él. */
 
 export const MODOS_ESQUEMA = [
   { id: 'fijo',    label: 'Fijo' },
@@ -358,11 +359,14 @@ export function normalizarEsquema(e) {
   const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) || Number(v) <= 0 ? null : Number(v));
   let min = num(e.min); let max = num(e.max);
   if (min != null && max != null && min > max) [min, max] = [max, min];
+  // El «cuándo» solo está si dice algo: un esquema sin él queda igual que antes.
+  const cuando = typeof e.cuando === 'string' ? e.cuando.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
   return {
     modo: e.modo,
     tomasDia: e.modo === 'fijo' ? Math.max(1, Math.round(num(e.tomasDia) ?? 1)) : null,
     min,
     max,
+    ...(cuando ? { cuando } : {}),
   };
 }
 

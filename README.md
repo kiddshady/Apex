@@ -50,12 +50,20 @@ sustancia no reescribe el historial.
 ### El esquema
 
 Una sustancia puede llevar su **esquema**: fijo (N tomas por día) o a demanda,
-con un rango por toma opcional.
+con un rango por toma opcional y un «cuándo» en texto libre (solo se guarda si
+dice algo).
 
 ```json
-"esquema": { "modo": "fijo", "tomasDia": 2, "min": null, "max": null }
+"esquema": { "modo": "fijo", "tomasDia": 2, "min": null, "max": null, "cuando": "8 y 20 h" }
 "esquema": { "modo": "demanda", "tomasDia": null, "min": 150, "max": 300 }
 ```
+
+La vista **Esquema** lo junta todo: una tabla para lo de todos los días (por
+toma, veces, total diario, cuándo, rango y cómo va hoy) y otra para lo de a
+demanda, sin tope de fármacos. Ahí se agrega, se edita (click en la fila) y se
+quita (el menú de la fila, con deshacer; la sustancia queda). La dosis por toma
+es la `dosisHabitual` de la sustancia: editarla en un lado la cambia en el
+otro. **Copiar** lo pasa a texto plano para mandarlo o mostrarlo.
 
 Hoy lo muestra arriba de todo: un punto por toma prevista, lleno el que ya se
 tomó, y en las de a demanda cuánto va del día. El rango es un dato, no un
@@ -204,6 +212,7 @@ Todo en hora local: una toma a las 23:30 es de ese día.
 | vista | qué hay |
 |---|---|
 | **Hoy** | cifras del día, accesos rápidos a la dosis habitual de cada sustancia, lo que está en curso, las tomas de hoy |
+| **Esquema** | la medicación de base entera: todos los días y a demanda, para verla, agregar, editar, quitar y copiar |
 | **Registro** | todas las tomas por día, con rango (7d · 30d · 90d · 1a · todo) y filtro de sustancia |
 | **Dosis** | la línea de tiempo del episodio, la curva de intensidad, el inspector con las notas |
 | **Sustancias** | la lista, y por cada una el perfil, las curvas superpuestas y la tabla de episodios |

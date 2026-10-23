@@ -66,6 +66,21 @@
 .ap-esq__estado { font-size: var(--ox-fs-12); color: var(--ox-text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ap-esq.is-completo .ap-esq__estado { color: var(--ox-text-3); }
 
+/* ── La vista Esquema: una tabla por frecuencia ─────────────────────────────
+   El nombre es lo que se busca con la vista: va en el texto fuerte. Lo vacío
+   es un guion apagado, para que la columna no se lea como un dato. */
+.ap-esqt__nombre { color: var(--ox-text); font-weight: var(--ox-w-medium); }
+.ap-esqt b { color: var(--ox-text); font-weight: var(--ox-w-semi); }
+.ap-esqt__nada { color: var(--ox-text-4); }
+.ap-esqt__fila { cursor: default; }
+.ap-esqt__hoy { display: inline-flex; align-items: center; gap: var(--ox-2); }
+.ap-esqt__hoy .ap-pips { width: auto; flex-wrap: nowrap; }
+.ap-esqt__fila .ap-esqt__nombre,
+.ap-esqt__fila .ap-esq__estado { transition: color var(--ox-t-2) var(--ox-ease-soft); }
+.ap-esqt__fila.is-completo .ap-esqt__nombre { color: var(--ox-text-2); }
+.ap-esqt__fila.is-completo .ap-esq__estado { color: var(--ox-text-3); }
+.ap-esqt__pie { margin-top: var(--ox-1); }
+
 /* ── Componentes de una combinación: una fila por sustancia ─────────────── */
 .ap-comps { display: flex; flex-direction: column; gap: var(--ox-2); }
 .ap-comp { display: flex; align-items: center; gap: 10px; }

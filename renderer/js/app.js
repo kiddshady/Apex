@@ -19,11 +19,12 @@ import {
   dialogoDosis, dialogoSustancia, dialogoCombinacion, dialogoHito, dialogoIngreso,
   dialogoReserva, dialogoSalida,
   menuDosis, menuSustancia, menuIngreso, menuReserva, menuSalida, menuRecuento, confirmarBorrarDosis,
-  dialogoRecuento,
+  dialogoRecuento, dialogoEsquema, menuEsquema,
 } from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
 
 import { vistaInicio } from './vistas/inicio.js';
+import { vistaEsquema, copiarEsquema } from './vistas/esquema.js';
 import { vistaRegistro } from './vistas/registro.js';
 import { vistaDosis } from './vistas/dosis.js';
 import { vistaSustancias, vistaSustancia } from './vistas/sustancias.js';
@@ -63,6 +64,7 @@ function vistaPiezas() {
 
 Router.define({
   inicio: { view: vistaInicio },
+  esquema: { view: vistaEsquema },
   registro: { view: vistaRegistro },
   dosis: { view: vistaDosis, nav: 'registro' },          // el detalle sigue iluminando Registro
   sustancias: { view: vistaSustancias },
@@ -99,6 +101,14 @@ async function registrarIngreso(sustanciaId = null) {
 
 async function recontar(clave = null) {
   if (await dialogoRecuento({ clave })) Router.name === 'stock' ? Router.refresh() : Router.go('stock');
+}
+
+async function agregarAlEsquema() {
+  if (await dialogoEsquema()) Router.name === 'esquema' ? Router.refresh() : Router.go('esquema');
+}
+
+async function editarEsquema(id) {
+  if (await dialogoEsquema({ sustanciaId: id, editar: true })) Router.refresh();
 }
 
 async function nuevaReserva(sustanciaId = null) {
@@ -145,7 +155,7 @@ function cablearShell() {
     if (trigger) {
       e.stopPropagation();
       const arg = trigger.dataset.menuArg;
-      const menus = { dosis: menuDosis, sustancia: menuSustancia, ingreso: menuIngreso, reserva: menuReserva, salida: menuSalida, recuento: menuRecuento };
+      const menus = { dosis: menuDosis, sustancia: menuSustancia, ingreso: menuIngreso, reserva: menuReserva, salida: menuSalida, recuento: menuRecuento, esquema: menuEsquema };
       const items = menus[trigger.dataset.menu]?.(arg, { despues: () => Router.refresh() }) || null;
       if (items) Menu.show(trigger, items, { align: 'end' });
       return;
@@ -156,6 +166,9 @@ function cablearShell() {
 
     const rapida = e.target.closest('[data-rapida]');
     if (rapida) return registrar(rapida.dataset.rapida);
+
+    const esq = e.target.closest('[data-esq]');
+    if (esq) return editarEsquema(esq.dataset.esq);
 
     const sust = e.target.closest('[data-sust]');
     if (sust && !e.target.closest('[data-menu], [data-rapida]')) return Router.go('sustancia', sust.dataset.sust);
@@ -169,6 +182,8 @@ function cablearShell() {
       if (a === 'registrar') registrar();
       else if (a === 'nueva-sustancia') nuevaSustancia();
       else if (a === 'nueva-combinacion') nuevaCombinacion();
+      else if (a === 'agregar-esquema') agregarAlEsquema();
+      else if (a === 'copiar-esquema') copiarEsquema();
       else if (a === 'registrar-ingreso') registrarIngreso(act.dataset.arg || null);
       else if (a === 'recontar') recontar(act.dataset.arg || null);
       else if (a === 'nueva-reserva') nuevaReserva(act.dataset.arg || null);
@@ -186,10 +201,11 @@ function cablearShell() {
   document.addEventListener('keydown', (e) => {
     // Enter o Espacio sobre una fila: la lista tiene que ser usable sin mouse.
     if ((e.key === 'Enter' || e.key === ' ') && e.target.closest) {
-      const row = e.target.closest('[data-open], [data-sust]');
+      const row = e.target.closest('[data-open], [data-sust], [data-esq]');
       if (row && !['INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName)) {
         e.preventDefault();
-        if (row.dataset.open) Router.go('dosis', row.dataset.open);
+        if (row.dataset.esq) editarEsquema(row.dataset.esq);
+        else if (row.dataset.open) Router.go('dosis', row.dataset.open);
         else Router.go('sustancia', row.dataset.sust);
         return;
       }
