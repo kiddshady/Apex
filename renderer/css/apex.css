@@ -23,6 +23,13 @@
   gap: var(--ox-3);
   margin-bottom: var(--ox-5);
 }
+/* El perfil de una sustancia lleva cinco: con el mínimo de 150 la quinta
+   quedaba sola en otra fila a 1280 de ancho, con el inspector abierto. En
+   flex y sin cortar la cifra, «hace 16 h» se lleva el ancho que necesita y
+   las demás se reparten el resto; en una ventana angosta bajan de a una. */
+.ap-kpis--cinco { display: flex; flex-wrap: wrap; }
+.ap-kpis--cinco .ap-kpi { flex: 1 1 118px; }
+.ap-kpis--cinco .ox-stat__value { white-space: nowrap; }
 .ap-kpi {
   padding: var(--ox-4);
   background: var(--ox-s2);

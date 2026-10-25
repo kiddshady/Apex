@@ -254,6 +254,10 @@ app.whenReady().then(async () => {
   console.log('\n9. El perfil de la sustancia');
   await js(`window.__apex.Router.go('sustancia', ${JSON.stringify(sust.id)}); true`);
   await sleep(800);
+  const kpiHoy = await js(`(() => { const k = document.querySelector('.ap-kpis--cinco .ap-kpi'); return k && { v: k.querySelector('.ox-stat__value').textContent.trim(), l: k.querySelector('.ox-stat__label').textContent.trim() }; })()`);
+  ok('la primera cifra es lo de hoy: 200 mg', kpiHoy?.l === 'Hoy' && kpiHoy.v === '200mg', JSON.stringify(kpiHoy));
+  const filasKpi = await js(`new Set([...document.querySelectorAll('.ap-kpis--cinco .ap-kpi')].map(k => Math.round(k.getBoundingClientRect().top))).size`);
+  ok('las cinco cifras entran en una fila', filasKpi === 1, String(filasKpi));
   const perfil = await js(`[...document.querySelectorAll('.ap-perfil__item')].map(i => ({ k: i.querySelector('.ap-perfil__k').textContent.trim(), v: i.querySelector('.ap-perfil__v').textContent.trim() }))`);
   const p = Object.fromEntries(perfil.map((x) => [x.k, x.v]));
   ok('onset a 1 h', p.Onset === '1 h', JSON.stringify(p));

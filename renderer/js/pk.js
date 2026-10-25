@@ -378,10 +378,7 @@ export function normalizarEsquema(e) {
 export function esquemaDelDia(s, dosis, ahora = Date.now()) {
   const e = normalizarEsquema(s?.esquema);
   if (!e) return null;
-  const desde = inicioDia(ahora);
-  const hasta = sumarDias(desde, 1);
-  const hoy = aportesDe(s.id, dosis).filter((d) => d.at >= desde && d.at < hasta).sort((a, b) => a.at - b.at);
-  const total = hoy.filter((d) => d.unidad === s.unidad).reduce((n, d) => n + (Number(d.cantidad) || 0), 0);
+  const { tomas: hoy, total } = consumoDelDia(s, dosis, ahora);
   return {
     ...e,
     hechas: hoy.length,
@@ -390,6 +387,19 @@ export function esquemaDelDia(s, dosis, ahora = Date.now()) {
     tomas: hoy,
     completo: e.modo === 'fijo' ? hoy.length >= e.tomasDia : null,
   };
+}
+
+/**
+ * Lo que se tomó de una sustancia en el día de `ahora`, tenga esquema o no:
+ * sus tomas más lo que aportó dentro de combinaciones, de la más vieja a la
+ * más nueva. La suma solo cuenta lo que está en la unidad de la sustancia.
+ */
+export function consumoDelDia(s, dosis, ahora = Date.now()) {
+  const desde = inicioDia(ahora);
+  const hasta = sumarDias(desde, 1);
+  const tomas = aportesDe(s.id, dosis).filter((d) => d.at >= desde && d.at < hasta).sort((a, b) => a.at - b.at);
+  const total = tomas.filter((d) => d.unidad === s.unidad).reduce((n, d) => n + (Number(d.cantidad) || 0), 0);
+  return { tomas, total, enCombinaciones: tomas.filter((d) => d.combinacion).length };
 }
 
 /* ── Stock ───────────────────────────────────────────────────────────────────

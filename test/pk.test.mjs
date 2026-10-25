@@ -143,6 +143,13 @@ es('dos tomas previstas, una hecha hoy', [diaL.hechas, diaL.tomasDia, diaL.compl
 // Fuera de rango no es error: el esquema describe, no limita.
 const diaZ = pk.esquemaDelDia(zolpi, [{ ...dz, at: t0, cantidad: 30 }], t0);
 es('una toma por encima del rango se cuenta igual', [diaZ.hechas, diaZ.total], [1, 30]);
+// El consumo del día no pide esquema: la tarjeta «Hoy» del perfil sale de acá.
+const atomo = { id: 's-a', unidad: 'mg' };
+const da = { id: 'd-a', sustanciaId: 's-a', at: t0 - 4 * HORA, cantidad: 25, unidad: 'mg', hitos: [] };
+const hoyA = pk.consumoDelDia(atomo, [da, { ...da, id: 'd-a2', at: t0 }, { ...da, id: 'd-a3', at: t0 - pk.DIA }], t0);
+es('el consumo de hoy suma solo las tomas del día', [hoyA.tomas.length, hoyA.total], [2, 50]);
+const hoyZ = pk.consumoDelDia({ id: 's-z', unidad: 'mg' }, [dc, dz], t0 + 9 * HORA);
+es('y cuenta lo que entró por una combinación', [hoyZ.tomas.length, hoyZ.total, hoyZ.enCombinaciones], [1, 10, 1]);
 
 console.log('\n10. Stock');
 es('la carga exacta con menos unidades', pk.cargaParaToma(300, [150, 300]), 300);

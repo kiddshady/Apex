@@ -7,7 +7,7 @@ import Router from '../router.js';
 import { paint, head, esc, empty, attempt } from '../ui.js';
 import { countTo, tick } from '../motion.js';
 import { fmtDosis, fmtQty, fmtMin, fmtHM, fmtDiaSemana, fmtOffset, relTime, monogram, plural } from '../format.js';
-import { perfil, curvas, curvaMediana, totales, ordenarHitos, sumarDias, inicioDia, esCombinacion, MIN } from '../pk.js';
+import { perfil, curvas, curvaMediana, totales, ordenarHitos, sumarDias, inicioDia, esCombinacion, consumoDelDia, MIN } from '../pk.js';
 import {
   S, sustancia, dosisDe, setContexto, guardarSustancia,
   cantidadDosis, habitualSustancia, textoEsquema, combinacionesCon, stocksActuales,
@@ -99,6 +99,14 @@ function filaSustancia(s) {
 
 /* ══ Detalle: el perfil ══════════════════════════════════════════════════════ */
 
+/** «2 tomas hoy, 1 dentro de una combinación». */
+function tipHoy(hoy) {
+  if (!hoy.tomas.length) return 'Nada hoy';
+  const base = `${plural(hoy.tomas.length, 'toma')} hoy`;
+  if (!hoy.enCombinaciones) return base;
+  return `${base}, ${hoy.enCombinaciones} dentro de ${hoy.enCombinaciones === 1 ? 'una combinación' : 'combinaciones'}`;
+}
+
 export function vistaSustancia(id) {
   const s = sustancia(id);
   if (!s) {
@@ -110,6 +118,7 @@ export function vistaSustancia(id) {
   const ds = dosisDe(id).sort((a, b) => b.at - a.at);
   const t = totales(ds);
   const hace30 = totales(ds.filter((d) => d.at >= sumarDias(inicioDia(Date.now()), -29)));
+  const hoy = consumoDelDia(s, S.dosis);
   const p = perfil(ds);
   const cs = curvas(ds);
   const med = curvaMediana(cs);
@@ -137,7 +146,10 @@ export function vistaSustancia(id) {
     <div class="ox-viewbody">
       <div class="ox-viewbody__main">
         <div class="ox-scroll ox-grow">
-          <div class="ap-kpis">
+          <div class="ap-kpis ap-kpis--cinco">
+            ${combo
+    ? kpi(hoy.tomas.length ? String(hoy.tomas.length) : '—', 'Hoy', { tip: hoy.tomas.length ? `${plural(hoy.tomas.length, 'toma')} de la combinación hoy` : 'Nada hoy' })
+    : kpi(hoy.tomas.length ? fmtQty(hoy.total) : '—', 'Hoy', { unidad: hoy.tomas.length ? s.unidad : '', tip: tipHoy(hoy) })}
             ${kpi('0', 'Tomas', { id: 'k-tomas' })}
             ${combo
     ? kpi(String(hace30.tomas), 'Últimos 30 días', { tip: 'Tomas de la combinación en los últimos 30 días' })
