@@ -955,6 +955,47 @@ app.whenReady().then(async () => {
   await sleep(1000);
   ok('y con el reloj de vuelta, vuelve a hoy', (await texto('.ox-viewhead__sub')) === subAntes, await texto('.ox-viewhead__sub'));
 
+  console.log('\n23. Algo suelto: una toma sin dar de alta un medicamento');
+  const railAntes = await texto('#cuenta-sustancias');
+  const ultimaAntes = await js(`window.__apex.S.ajustes.ultimaSustancia || null`);
+  await click('#btn-registrar'); await sleep(600);
+  await tap('.ox-modal #f-sust'); await sleep(250);
+  ok('el selector ofrece «Algo suelto…»', await menuItem('Algo suelto…'));
+  await sleep(300);
+  ok('abre el diálogo corto', await existe('#f-suelta'));
+  ok('sin nombre no sigue', (await primarioApagado()) === true);
+  await escribir('#f-suelta', 'Ibuprofeno');
+  await primario();
+  ok('vuelve al registro con la suelta elegida', (await texto('.ox-modal #f-sust .ox-select__value')) === 'Ibuprofeno');
+  ok('y la pista dice que va fuera de las estadísticas', ((await texto('#f-esq-hint')) || '').startsWith('Suelta'));
+  await escribir('#f-cant', '400');
+  await primario();
+  await sleep(300);
+  const ibu = await js(`window.onyx.col('sustancias').list().then(l => l.filter(s => s.nombre === 'Ibuprofeno'))`);
+  ok('quedó una sola sustancia, marcada suelta', ibu.length === 1 && ibu[0].suelta === true, JSON.stringify(ibu));
+  ok('que aprendió la cantidad para la próxima', ibu[0]?.dosisHabitual === 400, JSON.stringify(ibu[0]));
+  const tomaIbu = await js(`window.onyx.col('dosis').list().then(l => l.find(d => d.sustanciaId === ${JSON.stringify(ibu[0]?.id)}) || null)`);
+  ok('la toma quedó en disco', tomaIbu?.cantidad === 400 && tomaIbu.unidad === 'mg', JSON.stringify(tomaIbu));
+  ok('el rail no la cuenta como sustancia', (await texto('#cuenta-sustancias')) === railAntes, `${railAntes} → ${await texto('#cuenta-sustancias')}`);
+  ok('y no pasa a ser «la última»', (await js(`window.__apex.S.ajustes.ultimaSustancia || null`)) === ultimaAntes);
+  await click('[data-view="sustancias"]'); await sleep(800);
+  ok('Sustancias no la lista', !(await js(`document.getElementById('view').textContent.includes('Ibuprofeno')`)));
+  await click('[data-view="registro"]'); await sleep(800);
+  ok('el Registro sí la muestra', await js(`document.getElementById('view').textContent.includes('Ibuprofeno')`));
+  await click('#btn-registrar'); await sleep(600);
+  ok('el registro no abre con la suelta', (await texto('.ox-modal #f-sust .ox-select__value')) !== 'Ibuprofeno');
+  await tap('.ox-modal #f-sust'); await sleep(250);
+  ok('pero la ofrece para repetirla', await menuItem('Ibuprofeno'));
+  ok('con la cantidad de la última vez', (await js(`document.querySelector('#f-cant')?.value`)) === '400');
+  await tap('.ox-modal #f-sust'); await sleep(250);
+  await menuItem('Algo suelto…'); await sleep(300);
+  await escribir('#f-suelta', ' ibuprofeno ');
+  ok('el mismo nombre se reconoce', ((await texto('#f-suelta-ya')) || '').includes('Ya la anotaste'));
+  await primario();
+  ok('y vuelve con la misma, sin crear otra', (await texto('.ox-modal #f-sust .ox-select__value')) === 'Ibuprofeno'
+    && (await js(`window.onyx.col('sustancias').list().then(l => l.filter(s => s.nombre.toLowerCase() === 'ibuprofeno').length)`)) === 1);
+  await click('.ox-modal__foot .ox-btn:not(.ox-btn--primary)'); await sleep(500);
+
 
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');

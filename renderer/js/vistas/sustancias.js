@@ -28,20 +28,22 @@ const avatar = (s, extra = '') => (esCombinacion(s)
 /* ══ Lista ═══════════════════════════════════════════════════════════════════ */
 
 export function vistaSustancias() {
-  const activasL = S.sustancias.filter((s) => !s.archivada && !esCombinacion(s));
-  const combos = S.sustancias.filter((s) => !s.archivada && esCombinacion(s));
-  const archivadas = S.sustancias.filter((s) => s.archivada);
+  // Las sueltas (un AINE de una tarde) no son medicación: no se listan acá.
+  const todas = S.sustancias.filter((s) => !s.suelta);
+  const activasL = todas.filter((s) => !s.archivada && !esCombinacion(s));
+  const combos = todas.filter((s) => !s.archivada && esCombinacion(s));
+  const archivadas = todas.filter((s) => s.archivada);
 
   setContexto('');
   paint(head({
     title: 'Sustancias',
-    sub: S.sustancias.length ? [
+    sub: todas.length ? [
       plural(activasL.length, 'activa'),
       combos.length ? plural(combos.length, 'combinación', 'combinaciones') : null,
       archivadas.length ? plural(archivadas.length, 'archivada') : null,
     ].filter(Boolean).join(' · ') : 'Lo que tomás, con su unidad y su dosis habitual',
     actions: BTN_NUEVA,
-  }) + (S.sustancias.length ? `
+  }) + (todas.length ? `
     <div class="ox-scroll ox-grow">
       <div class="ox-list">${activasL.map(filaSustancia).join('')}</div>
       ${combos.length ? `

@@ -94,7 +94,7 @@ export function vistaDosis(id) {
             <div class="ox-truncate" style="font-weight:var(--ox-w-medium)">${esc(s?.nombre || 'Sustancia eliminada')}</div>
             <div class="ox-meta ox-mono">${esc(d.id)}</div>
           </div>
-          ${s ? `<button class="ox-iconbtn ox-iconbtn--sm" data-sust="${esc(s.id)}" data-tip="Ver la sustancia">${Icons.svg('curva')}</button>` : ''}
+          ${s && !s.suelta ? `<button class="ox-iconbtn ox-iconbtn--sm" data-sust="${esc(s.id)}" data-tip="Ver la sustancia">${Icons.svg('curva')}</button>` : ''}
         </div>
         <div class="ox-inspector__body ox-scroll">
           <div class="ox-kv" style="margin-bottom:18px">

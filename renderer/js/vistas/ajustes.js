@@ -81,7 +81,7 @@ export function vistaAjustes() {
               <span class="ox-kv__k">Carpeta</span>
               <span class="ox-kv__v ox-mono ox-copyable" data-copy="${esc(S.info?.dataDir || '')}" data-tip="Click para copiar">${esc(S.info?.dataDir || '—')}</span>
               <span class="ox-kv__k">Tomas</span><span class="ox-kv__v ox-num">${S.dosis.length}</span>
-              <span class="ox-kv__k">Sustancias</span><span class="ox-kv__v ox-num">${S.sustancias.length}</span>
+              <span class="ox-kv__k">Sustancias</span><span class="ox-kv__v ox-num">${S.sustancias.filter((s) => !s.suelta).length}</span>
               <span class="ox-kv__k">Esquema</span><span class="ox-kv__v ox-mono">v${esc(a.schema ?? 1)}</span>
             </div>
             <div class="ox-row" style="gap:8px;margin-top:16px;flex-wrap:wrap">

@@ -68,7 +68,7 @@ export function vistaRegistro() {
   const opciones = [
     { value: null, label: 'Todas las sustancias' },
     { sep: true },
-    ...S.sustancias.filter((s) => !s.archivada || conTomas.has(s.id)).map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: s.componentes?.length ? 'combinacion' : 'pill' })),
+    ...S.sustancias.filter((s) => (!s.archivada && !s.suelta) || conTomas.has(s.id)).map((s) => ({ value: s.id, label: s.archivada ? `${s.nombre} (archivada)` : s.nombre, icon: s.componentes?.length ? 'combinacion' : s.suelta ? 'gota' : 'pill' })),
   ];
   bindSelect(document.getElementById('f-sust'), opciones, {
     valor: filtroSustancia,

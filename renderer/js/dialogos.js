@@ -26,6 +26,7 @@ import {
 import { UNIDADES, VIAS, PRESENTACIONES, pasoPara } from './vocab.js';
 import {
   S, sustancia, dosis as tomarDosis, dosisDe, activas, etiquetaDosis, combinacionesCon, textoEsquema,
+  esSuelta, sueltasUsadas,
   guardarSustancia, guardarDosis, borrarDosis, borrarSustancia, guardarAjustes,
   stocksActuales, ingreso as tomarIngreso, guardarIngreso, borrarIngreso, nombreSustancia,
   reserva as tomarReserva, guardarReserva, borrarReserva,
@@ -505,8 +506,8 @@ export async function dialogoDosis({ existente = null, sustanciaId = null } = {}
 
   for (;;) {
     const res = await formularioDosis(estado, existente);
-    if (res === 'nueva' || res === 'combinacion') {
-      const s = res === 'nueva' ? await dialogoSustancia() : await dialogoCombinacion();
+    if (res === 'nueva' || res === 'combinacion' || res === 'suelta') {
+      const s = res === 'nueva' ? await dialogoSustancia() : res === 'suelta' ? await dialogoSuelta() : await dialogoCombinacion();
       if (s) { estado.sustanciaId = s.id; estado.cantidad = null; estado.componentes = null; estado.via = undefined; }
       continue;
     }
@@ -517,12 +518,14 @@ export async function dialogoDosis({ existente = null, sustanciaId = null } = {}
 async function formularioDosis(estado, existente) {
   // La sustancia archivada de una toma vieja tiene que poder seguir eligiéndose
   // al editarla; las demás archivadas no aparecen.
-  const opciones = activas();
+  // Lo mismo con una suelta recién creada, que todavía no tiene tomas.
+  const opciones = [...activas(), ...sueltasUsadas()];
   const actual = sustancia(estado.sustanciaId);
   if (actual && !opciones.includes(actual)) opciones.unshift(actual);
   const s0 = actual || opciones[0];
-  const simples = opciones.filter((s) => !esCombinacion(s));
+  const simples = opciones.filter((s) => !esCombinacion(s) && !esSuelta(s));
   const combos = opciones.filter(esCombinacion);
+  const sueltas = opciones.filter(esSuelta);
 
   const body = document.createElement('div');
   body.className = 'ox-col';
@@ -640,17 +643,19 @@ async function formularioDosis(estado, existente) {
     estado.notas = notas.value;
   };
 
-  const opcion = (s) => ({ value: s.id, label: s.nombre, icon: esCombinacion(s) ? 'combinacion' : 'pill' });
+  const opcion = (s) => ({ value: s.id, label: s.nombre, icon: esCombinacion(s) ? 'combinacion' : esSuelta(s) ? 'gota' : 'pill' });
   const selS = bindSelect(body.querySelector('#f-sust'), [
     ...simples.map(opcion),
     ...(combos.length ? [{ sep: true }, ...combos.map(opcion)] : []),
+    ...(sueltas.length ? [{ sep: true }, ...sueltas.map(opcion)] : []),
     { sep: true },
     { value: '__nueva', label: 'Nueva sustancia…', icon: 'plus', siempre: true },
     { value: '__combinacion', label: 'Nueva combinación…', icon: 'combinacion', siempre: true },
+    { value: '__suelta', label: 'Algo suelto…', icon: 'gota', siempre: true },
   ], {
     valor: s0?.id || null,
     onChange: (v) => {
-      if (v === '__nueva' || v === '__combinacion') { recordar(); Modal.close(v === '__nueva' ? 'nueva' : 'combinacion'); return; }
+      if (String(v).startsWith('__')) { recordar(); Modal.close(v.slice(2) === 'combinacion' ? 'combinacion' : v.slice(2)); return; }
       const s = sustancia(v);
       if (!s) return;
       // Otra combinación trae sus propias cantidades: las tipeadas eran de la anterior.
@@ -673,7 +678,7 @@ async function formularioDosis(estado, existente) {
   setTimeout(() => { const c = campos()[0]; c?.focus(); c?.select(); }, 80);
 
   const ok = await p;
-  if (ok === 'nueva' || ok === 'combinacion') return ok;
+  if (ok === 'nueva' || ok === 'combinacion' || ok === 'suelta') return ok;
   if (!ok) return null;
   recordar();
 
@@ -708,7 +713,16 @@ async function formularioDosis(estado, existente) {
   else delete item.carga;
   const saved = await attempt(() => guardarDosis(item), { errorTitle: 'No se pudo guardar la toma' });
   if (!saved) return null;
-  attempt(() => guardarAjustes({ ultimaSustancia: s.id }), { errorTitle: 'No se pudo recordar la sustancia' });
+  /* Una suelta no queda como «la última»: el registro abriría la próxima vez
+     con el ibuprofeno de una tarde en vez de la medicación de todos los días.
+     Lo que sí aprende es la cantidad y la vía, para proponerlas al repetirla. */
+  if (esSuelta(s)) {
+    if (s.dosisHabitual !== item.cantidad || (s.via || null) !== item.via) {
+      attempt(() => guardarSustancia({ ...s, dosisHabitual: item.cantidad, via: item.via }), { errorTitle: 'No se pudo recordar la cantidad' });
+    }
+  } else {
+    attempt(() => guardarAjustes({ ultimaSustancia: s.id }), { errorTitle: 'No se pudo recordar la sustancia' });
+  }
   Toast.show({
     title: existente ? 'Toma actualizada' : 'Toma registrada',
     text: `${etiquetaDosis(saved)} · ${fmtHM(saved.at)}`,
@@ -727,6 +741,7 @@ function pistaEsquema(s, editando) {
     const con = s.componentes.map((c) => sustancia(c.sustanciaId)).filter((x) => x && normalizarEsquema(x.esquema));
     return con.length ? `Cuenta para el esquema de ${con.map((x) => x.nombre).join(' y ')}.` : '';
   }
+  if (esSuelta(s)) return 'Suelta: queda en el registro, fuera de Sustancias, Stock y Gráficos.';
   const dia = esquemaDelDia(s, S.dosis);
   if (!dia) return '';
   const partes = [textoEsquema(s)];
@@ -738,6 +753,82 @@ function pistaEsquema(s, editando) {
   return partes.join(' · ');
 }
 
+/* ══ Suelta ══════════════════════════════════════════════════════════════════ */
+
+/** «Ibuprofeno» y «ibuprofeno » son lo mismo; «Paracetamol» e «paracetamól», también. */
+const claveNombre = (n) => String(n || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+
+/**
+ * Lo mínimo para anotar algo que se toma de vez en cuando: nombre y unidad.
+ * Si el nombre ya existe —como suelta o como sustancia de verdad— devuelve esa
+ * en vez de crear otra: el mismo ibuprofeno de siempre, no uno nuevo por toma.
+ */
+export async function dialogoSuelta() {
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '16px';
+  const unidad0 = S.ajustes.unidadDefault || UNIDADES[0];
+  body.innerHTML = `
+    <div class="ox-row" style="gap:12px;align-items:flex-start">
+      <div class="ox-field ox-grow">
+        <label class="ox-field__label" for="f-suelta">Qué tomaste</label>
+        <input class="ox-input" id="f-suelta" placeholder="Ibuprofeno" spellcheck="false" autocomplete="off" maxlength="80">
+        <span class="ox-field__hint" id="f-suelta-ya"></span>
+      </div>
+      <div class="ox-field" style="width:150px">
+        <label class="ox-field__label">Unidad</label>
+        ${selectHTML({ id: 'f-suelta-u', placeholder: 'mg' })}
+      </div>
+    </div>`;
+
+  const p = Modal.show({
+    title: 'Algo suelto',
+    sub: 'Para lo que tomás de vez en cuando, como un AINE. Queda en el registro, pero no se da de alta como medicamento: no aparece en Sustancias, el Esquema, el Stock ni los Gráficos.',
+    body,
+    width: 520,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: 'Seguir', value: true, variant: 'primary' },
+    ],
+  });
+  const primario = primarioDe();
+  const nombre = body.querySelector('#f-suelta');
+  const ya = body.querySelector('#f-suelta-ya');
+  const selU = bindSelect(body.querySelector('#f-suelta-u'), UNIDADES.map((u) => ({ value: u, label: u })), { valor: unidad0 });
+  const existente = () => {
+    const k = claveNombre(nombre.value);
+    if (!k) return null;
+    const iguales = S.sustancias.filter((s) => !esCombinacion(s) && claveNombre(s.nombre) === k);
+    // Una sustancia de verdad le gana a una suelta del mismo nombre.
+    return iguales.find((s) => !s.suelta && !s.archivada) || iguales.find((s) => s.suelta) || null;
+  };
+  const validar = () => {
+    if (primario) primario.disabled = !nombre.value.trim();
+    const e = existente();
+    frase(ya, e && !e.suelta ? 'Ya está en tus sustancias: la toma va a esa.' : e ? 'Ya la anotaste antes: se suma a esa.' : '');
+    if (e?.unidad && selU.valor !== e.unidad) selU.set(e.unidad);
+  };
+  nombre.addEventListener('input', validar);
+  validar();
+  enterEnvia(body);
+  setTimeout(() => nombre.focus(), 80);
+
+  const ok = await p;
+  if (!ok) return null;
+  const e = existente();
+  if (e) return e;
+  return attempt(() => guardarSustancia({
+    nombre: nombre.value.trim().replace(/\s+/g, ' '),
+    unidad: selU.valor || UNIDADES[0],
+    dosisHabitual: null,
+    via: null,
+    vidaMedia: null,
+    esquema: null,
+    notas: '',
+    suelta: true,
+  }), { errorTitle: 'No se pudo anotar' });
+}
+
 /* ══ Combinación ═════════════════════════════════════════════════════════════ */
 
 /**
@@ -746,7 +837,7 @@ function pistaEsquema(s, editando) {
  */
 export async function dialogoCombinacion(existente = null) {
   const usadas = new Set((existente?.componentes || []).map((c) => c.sustanciaId));
-  const simples = S.sustancias.filter((s) => !esCombinacion(s) && (!s.archivada || usadas.has(s.id)));
+  const simples = S.sustancias.filter((s) => !esCombinacion(s) && !s.suelta && (!s.archivada || usadas.has(s.id)));
   if (simples.length < 2) {
     Toast.show({ title: 'Hacen falta dos sustancias', text: 'Una combinación junta dos o tres sustancias que ya existan.', icon: 'pill' });
     return null;
@@ -1043,7 +1134,7 @@ export async function borrarHito(d, hitoId) {
  */
 export async function dialogoIngreso({ existente = null, sustanciaId = null, reserva = false } = {}) {
   const usadas = new Set(existente ? [existente.sustanciaId] : []);
-  const opciones = S.sustancias.filter((s) => !esCombinacion(s) && (reserva || !s.archivada || usadas.has(s.id)));
+  const opciones = S.sustancias.filter((s) => !esCombinacion(s) && !s.suelta && (reserva || !s.archivada || usadas.has(s.id)));
   if (!opciones.length) {
     Toast.show({ title: 'Primero, una sustancia', text: `${reserva ? 'Una reserva' : 'Un ingreso'} dice de qué droga es: creala en Sustancias.`, icon: 'pill' });
     return null;

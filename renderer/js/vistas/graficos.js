@@ -8,7 +8,7 @@ import { paint, head, esc } from '../ui.js';
 import { bindSwitcher, toggleReveal } from '../motion.js';
 import { fmtDosis, fmtQty, fmtDiaSemana, plural } from '../format.js';
 import { RANGOS, rango, serieDiaria, calendario, semanaHora, enRango, aportesDe } from '../pk.js';
-import { S, sustancia, guardarAjustes, setContexto } from '../tienda.js';
+import { S, sustancia, guardarAjustes, setContexto, dosisMedicacion } from '../tienda.js';
 import { selectHTML } from '../dialogos.js';
 import { Menu } from '../overlays.js';
 import { grafLinea, grafCalendario, grafSemanaHora } from '../graficos.js';
@@ -41,10 +41,12 @@ export function vistaGraficos() {
      Una selección múltiple sí puede usar dosis cuando todas comparten unidad. */
   const metrica = unidadComun ? (a.metricaGraficos || 'total') : 'tomas';
   const unidad = unidadComun && metrica === 'total' ? seleccion[0].unidad : '';
-  const r = rango(a.rangoGraficos || '90d', S.dosis);
+  // Las tomas sueltas no entran a los gráficos: son de medicación.
+  const tomas = dosisMedicacion();
+  const r = rango(a.rangoGraficos || '90d', tomas);
   /* Lo que se tomó de una sustancia incluye lo que entró dentro de una
      combinación: 10 mg de zolpidem son 10 mg aunque hayan venido con otra cosa. */
-  const base = sustIds.length ? sustIds.flatMap((id) => aportesDe(id, S.dosis)) : S.dosis;
+  const base = sustIds.length ? sustIds.flatMap((id) => aportesDe(id, tomas)) : tomas;
   const serie = serieDiaria(base, { ...r, metrica });
   const series = seleccion.length > 1 ? seleccion.map((item) => ({
     id: item.id,
@@ -114,7 +116,7 @@ export function vistaGraficos() {
   bindSwitcher(document.getElementById('f-mapa'), (v) => cambiar({ mapaModo: v }));
 
   const conTomas = new Set(S.dosis.map((d) => d.sustanciaId));
-  const disponibles = S.sustancias.filter((x) => !x.archivada || conTomas.has(x.id));
+  const disponibles = S.sustancias.filter((x) => !x.suelta && (!x.archivada || conTomas.has(x.id)));
   const selector = document.getElementById('f-sust');
   selector.addEventListener('click', () => {
     const alMaximo = sustIds.length >= MAX_SUSTANCIAS;

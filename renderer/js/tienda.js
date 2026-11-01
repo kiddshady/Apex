@@ -58,7 +58,22 @@ export async function cargarTodo() {
 export const sustancia = (id) => S.sustancias.find((s) => s.id === id) || null;
 export const dosis = (id) => S.dosis.find((d) => d.id === id) || null;
 export const dosisDe = (sustanciaId) => S.dosis.filter((d) => d.sustanciaId === sustanciaId);
-export const activas = () => S.sustancias.filter((s) => !s.archivada);
+/* Una sustancia SUELTA es lo que se toma de vez en cuando —un AINE, un
+   antigripal— y se quiere anotar sin darlo de alta como medicamento. Por
+   dentro es una sustancia más (así la toma se lista, se edita y se repite
+   igual que cualquiera), pero marcada `suelta: true`: no aparece en
+   Sustancias, Esquema, Stock ni Gráficos, ni en los selectores de esas
+   partes. Vive en el Registro, en Hoy y en el diálogo de registrar. */
+export const esSuelta = (s) => !!s?.suelta;
+export const activas = () => S.sustancias.filter((s) => !s.archivada && !s.suelta);
+/** Las sueltas que ya tienen alguna toma: las que el registro ofrece para repetir.
+    Una suelta sin tomas (un nombre mal tipeado cuya toma se borró) no estorba. */
+export function sueltasUsadas() {
+  const con = new Set(S.dosis.map((d) => d.sustanciaId));
+  return S.sustancias.filter((s) => s.suelta && con.has(s.id));
+}
+/** Las tomas de medicación: todas menos las sueltas. Lo que miran los gráficos. */
+export const dosisMedicacion = () => S.dosis.filter((d) => !esSuelta(sustancia(d.sustanciaId)));
 /** Las sustancias activas que tienen esquema: la vista Esquema y su contador. */
 export const delEsquema = () => activas().filter((s) => !esCombinacion(s) && normalizarEsquema(s.esquema));
 
