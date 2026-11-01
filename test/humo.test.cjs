@@ -936,6 +936,25 @@ app.whenReady().then(async () => {
   if (pista.sinCampo || !pista.visible) console.log(`  --   pista del momento salteada (${JSON.stringify(pista)})`);
   else ok('la pista del momento se despliega con su alto', pista.final > 0 && aMedias(pista.altos, pista.final), JSON.stringify(pista));
 
+  console.log('\n22. Abierta de un día al otro');
+  /* El reloj de la página se adelanta a mañana (se reemplaza su Date): la
+     medianoche se simula, no se espera. Volver a la ventana la hace revisar. */
+  await click('[data-view="inicio"]'); await sleep(700);
+  const subAntes = await texto('.ox-viewhead__sub');
+  const tomasHoyAntes = await texto('#k-hoy');
+  const manana = new Date(); manana.setDate(manana.getDate() + 1); manana.setHours(10, 0, 0, 0);
+  await js(`(() => { const R = Date; window.__DateReal = R; const off = ${manana.getTime()} - R.now();
+    window.Date = class extends R { constructor(...a) { if (a.length) super(...a); else super(R.now() + off); } static now() { return R.now() + off; } };
+    window.dispatchEvent(new Event('focus')); return true; })()`);
+  await sleep(1400);
+  const subDespues = await texto('.ox-viewhead__sub');
+  ok('al volver a la ventana pasada la medianoche, Hoy dice el día nuevo',
+    subDespues !== subAntes && subDespues?.includes(String(manana.getDate())), `${subAntes} → ${subDespues}`);
+  ok('y las tomas de hoy arrancan de cero', (await texto('#k-hoy')) === '0', `antes ${tomasHoyAntes}, ahora ${await texto('#k-hoy')}`);
+  await js(`window.Date = window.__DateReal; window.dispatchEvent(new Event('focus')); true`);
+  await sleep(1000);
+  ok('y con el reloj de vuelta, vuelve a hoy', (await texto('.ox-viewhead__sub')) === subAntes, await texto('.ox-viewhead__sub'));
+
 
   console.log(`\n═══ ${pass} ok · ${fail} fallas ═══`);
   console.log(errores.length ? `CONSOLA:\n  ${errores.join('\n  ')}` : 'CONSOLA: limpia');

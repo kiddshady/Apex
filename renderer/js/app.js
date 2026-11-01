@@ -22,6 +22,7 @@ import {
   dialogoRecuento, dialogoEsquema, menuEsquema,
 } from './dialogos.js';
 import { initActualizacion } from './actualizacion.js';
+import { Dia } from './dia.js';
 
 import { vistaInicio } from './vistas/inicio.js';
 import { vistaEsquema, copiarEsquema } from './vistas/esquema.js';
@@ -227,6 +228,21 @@ function sincronizarColor() {
   if (hex) api.win.setBackground(hex);
 }
 
+/* ══ El día nuevo ════════════════════════════════════════════════════════════
+   Las vistas calculan «hoy» al pintarse, así que con pasar la medianoche
+   alcanza con rehacer la que está a la vista. Se revisa cada minuto (por si
+   está a la vista justo a las 00:00) y al recuperar el foco o volver a verse:
+   con la PC suspendida o la ventana minimizada el intervalo anda frenado. */
+function vigilarDia() {
+  Dia.alCambiar(() => {
+    Router.refresh();
+    pintarChrome();
+  });
+  setInterval(() => Dia.revisar(), 60_000);
+  window.addEventListener('focus', () => Dia.revisar());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) Dia.revisar(); });
+}
+
 /* ══ Arranque ════════════════════════════════════════════════════════════════ */
 
 async function boot() {
@@ -250,6 +266,7 @@ async function boot() {
   pintarChrome();
   Router.onChange(() => pintarChrome());
   Router.go('inicio');
+  vigilarDia();
 
   // El splash se va recién cuando ya hay algo pintado debajo.
   raf2(() => {

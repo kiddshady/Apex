@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node test/tokens.test.mjs && node test/store.test.mjs && node test/format.test.mjs && node test/pk.test.mjs",
+    "test": "node test/tokens.test.mjs && node test/store.test.mjs && node test/format.test.mjs && node test/pk.test.mjs && node test/dia.test.mjs",
     "humo": "electron test/humo.test.cjs",
     "icon": "electron build/make-icon.cjs",
     "build": "electron-builder --win --publish never",
