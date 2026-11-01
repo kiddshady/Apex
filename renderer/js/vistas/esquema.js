@@ -83,25 +83,35 @@ const acciones = (s) => `<td class="ox-td--tight"><div class="ox-rowactions">
     <button class="ox-iconbtn ox-iconbtn--sm" data-menu="esquema" data-menu-arg="${esc(s.id)}" data-tip="Más">${Icons.svg('more')}</button>
   </div></td>`;
 
+/* Fuera de indicación: lo que el consumo real del día pasa del total diario
+   que indica el esquema. Es una cuenta, no un aviso: va en el mismo tono que
+   el resto de la fila. Sin total diario (falta la dosis por toma) no hay con
+   qué comparar. */
+function fueraDeIndicacion(dia, diaria) {
+  if (!diaria) return '';
+  const extra = dia.total - diaria;
+  return extra > 0 ? `+${fmtDosis(extra, dia.unidad)}` : '';
+}
+
 function tablaFijos(lista) {
   const fila = ({ s, dia }) => {
     const diaria = dosisDiariaEsquema(s);
-    const pips = Array.from({ length: dia.tomasDia }, (_, i) => `<span class="ap-pip${i < dia.hechas ? ' is-on' : ''}"></span>`).join('');
+    const pips = Array.from({ length: Math.max(dia.tomasDia, dia.hechas) }, (_, i) => `<span class="ap-pip${i < dia.hechas ? ' is-on' : ''}"></span>`).join('');
     return `<tr class="ox-tr ap-esqt__fila${dia.completo ? ' is-completo' : ''}" role="button" tabindex="0" data-esq="${esc(s.id)}">
       ${tdNombre(s)}
       <td class="ox-td--num">${celda(porToma(s))}</td>
       <td class="ox-td--num">${esc(dia.tomasDia === 1 ? '1 vez' : `${dia.tomasDia} veces`)}</td>
       <td class="ox-td--num"><b>${celda(diaria ? fmtDosis(diaria, s.unidad) : '')}</b></td>
-      <td>${celda(dia.cuando)}</td>
-      <td class="ox-td--num">${celda(rango(dia, s.unidad))}</td>
+      <td class="ox-td--num">${celda(dia.hechas ? fmtDosis(dia.total, dia.unidad) : '')}</td>
+      <td class="ox-td--num">${celda(fueraDeIndicacion(dia, diaria))}</td>
       <td><span class="ap-esqt__hoy"><span class="ap-pips">${pips}</span><span class="ap-esq__estado">${esc(`${dia.hechas} de ${dia.tomasDia}`)}</span></span></td>
       ${acciones(s)}
     </tr>`;
   };
   return `<table class="ox-table ap-esqt">
     <thead><tr>
-      <th>Fármaco</th><th class="ox-td--num">Por toma</th><th class="ox-td--num">Veces por día</th><th class="ox-td--num">Total diario</th>
-      <th>Cuándo</th><th class="ox-td--num">Rango</th><th>Hoy</th><th></th>
+      <th>Fármaco</th><th class="ox-td--num">Dosis</th><th class="ox-td--num">Administraciones por día</th><th class="ox-td--num">Total diario</th>
+      <th class="ox-td--num">Consumo real en el día</th><th class="ox-td--num">Fuera de indicación</th><th>Número de administraciones</th><th></th>
     </tr></thead>
     <tbody>${lista.map(fila).join('')}</tbody>
   </table>`;
