@@ -50,7 +50,7 @@ export function vistaEsquema() {
   }) + (todas.length ? `
     <div class="ox-scroll ox-grow">
       ${fijos.length ? `
-        <div class="ox-card ap-cardchart" id="esq-fijos">
+        <div class="ox-card ap-cardchart ap-esqcard" id="esq-fijos">
           <div class="ox-card__head">
             <span class="ox-subtitle">Todos los días</span>
             <span class="ox-meta">${esc(plural(fijos.reduce((n, x) => n + x.dia.tomasDia, 0), 'toma'))} por día en total · ${esc(`${fijos.filter((x) => x.dia.completo).length} de ${fijos.length}`)} completos hoy</span>
@@ -58,7 +58,7 @@ export function vistaEsquema() {
           <div class="ox-card__body" style="padding-left:0;padding-right:0;padding-bottom:6px">${tablaFijos(fijos)}</div>
         </div>` : ''}
       ${demanda.length ? `
-        <div class="ox-card ap-cardchart" id="esq-demanda">
+        <div class="ox-card ap-cardchart ap-esqcard" id="esq-demanda">
           <div class="ox-card__head">
             <span class="ox-subtitle">A demanda</span>
             <span class="ox-meta">cuando hace falta, sin un número fijo por día</span>

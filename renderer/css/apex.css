@@ -87,6 +87,23 @@
 .ap-esqt__fila.is-completo .ap-esqt__nombre { color: var(--ox-text-2); }
 .ap-esqt__fila.is-completo .ap-esq__estado { color: var(--ox-text-3); }
 .ap-esqt__pie { margin-top: var(--ox-1); }
+/* Siete títulos largos en mayúsculas espaciadas («Administraciones por día»,
+   «Consumo real en el día»): con el nowrap de la plantilla la tabla medía más
+   que la card a 1080 px y la última columna quedaba afuera, mientras las
+   CIFRAS («200 mg») se partían en dos renglones para hacerle lugar. Es al
+   revés: el título se parte, parejo y abajo contra su columna; el dato no. */
+.ap-esqt th { white-space: normal; text-wrap: balance; vertical-align: bottom; line-height: 1.4; }
+.ap-esqt td { white-space: nowrap; }
+/* Con la ventana en su mínimo (900 px) la card mide ~640 y la de todos los
+   días, con ocho columnas, se pasaba igual por ~100 px. Ahí se achica el aire
+   entre columnas y el espaciado de los títulos; el primer renglón de la
+   izquierda conserva su margen para seguir alineado con el título de la card. */
+.ap-esqcard { container-type: inline-size; }
+@container (max-width: 760px) {
+  .ap-esqt th, .ap-esqt td { padding-left: 6px; padding-right: 6px; }
+  .ap-esqt th:first-child, .ap-esqt td:first-child { padding-left: var(--ox-3); }
+  .ap-esqt th { letter-spacing: .06em; }
+}
 
 /* ── Componentes de una combinación: una fila por sustancia ─────────────── */
 .ap-comps { display: flex; flex-direction: column; gap: var(--ox-2); }
